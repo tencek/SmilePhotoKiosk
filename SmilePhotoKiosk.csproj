@@ -96,13 +96,12 @@
       <Link>MainPage.xaml.cs</Link>
       <DependentUpon>MainPage.xaml</DependentUpon>
     </Compile>
-    <Compile Include="AssemblyInfo.cs">
-      <Link>Properties\AssemblyInfo.cs</Link>
-    </Compile>
-    <Compile Include="SampleConfiguration.cs" />
     <Compile Include="Scenario1_TrackInWebcam.xaml.cs">
+      <Link>Scenario1_TrackInWebcam.xaml.cs</Link>
       <DependentUpon>Scenario1_TrackInWebcam.xaml</DependentUpon>
-    </Compile>
+	</Compile>
+    <Compile Include="AssemblyInfo.cs"/>
+    <Compile Include="SampleConfiguration.cs" />
   </ItemGroup>
   <ItemGroup>
     <AppxManifest Include="Package.appxmanifest">
@@ -115,8 +114,16 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
+    <Page Include="App.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Page Include="MainPage.xaml">
       <Link>MainPage.xaml</Link>
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="MainPage.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
@@ -124,6 +131,10 @@
       <Link>Scenario1_TrackInWebcam.xaml</Link>
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Scenario1_TrackInWebcam.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="Styles.xaml">
       <Link>Styles\Styles.xaml</Link>
@@ -167,6 +178,8 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Assets\emotions\" />
+    <Folder Include="Properties\" />
+    <Folder Include="Styles\" />
   </ItemGroup>
   <PropertyGroup Condition=" '$(VisualStudioVersion)' == '' or '$(VisualStudioVersion)' &lt; '14.0' ">
     <VisualStudioVersion>14.0</VisualStudioVersion>
