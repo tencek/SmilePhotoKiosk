@@ -1,46 +1,45 @@
-//*********************************************************
-//
-// Copyright (c) Microsoft. All rights reserved.
-// This code is licensed under the MIT License (MIT).
-// THIS CODE IS PROVIDED *AS IS* WITHOUT WARRANTY OF
-// ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING ANY
-// IMPLIED WARRANTIES OF FITNESS FOR A PARTICULAR
-// PURPOSE, MERCHANTABILITY, OR NON-INFRINGEMENT.
-//
-//*********************************************************
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Linq;
+using System.IO;
 
+using Windows.UI.Core;
+using Windows.UI.Xaml;
+using Windows.UI.Xaml.Automation.Peers;
+using Windows.UI.Xaml.Controls;
+using Windows.UI.Xaml.Media;
+using Windows.UI.Xaml.Navigation;
 using Windows.Graphics.Imaging;
 using Windows.Media;
 using Windows.Media.Capture;
 using Windows.Media.FaceAnalysis;
 using Windows.Media.MediaProperties;
 using Windows.System.Threading;
-using Windows.UI.Xaml;
-using Windows.UI.Xaml.Controls;
-using Windows.UI.Xaml.Media;
-using Windows.UI.Xaml.Media.Imaging;
-using Windows.UI.Xaml.Navigation;
 using Windows.UI.Xaml.Shapes;
+using Windows.Storage;
+using Windows.Storage.Streams;
+
 using Microsoft.Azure.CognitiveServices.Vision.Face;
 using Microsoft.Azure.CognitiveServices.Vision.Face.Models;
 using LocalDetectedFace = Windows.Media.FaceAnalysis.DetectedFace;
 using RemoteDetectedFace = Microsoft.Azure.CognitiveServices.Vision.Face.Models.DetectedFace;
-using Windows.Storage.Streams;
-using System.IO;
-using Windows.Storage;
 
-namespace SDKTemplate
+// The Blank Page item template is documented at https://go.microsoft.com/fwlink/?LinkId=402352&clcid=0x409
+
+namespace SmilePhotoKiosk
 {
-    /// <summary>
-    /// Page for demonstrating FaceTracking.
-    /// </summary>
-    public sealed partial class TrackFacesInWebcam : Page
+   public enum NotifyType
+   {
+      StatusMessage,
+      ErrorMessage
+   };
+
+   /// <summary>
+   /// An empty page that can be used on its own or navigated to within a Frame.
+   /// </summary>
+   public sealed partial class MainPage : Page
     {
         /// <summary>
         /// Brush for drawing the bounding box around each identified face.
@@ -56,11 +55,6 @@ namespace SDKTemplate
         /// Transparent fill for the bounding box.
         /// </summary>
         private readonly SolidColorBrush fillBrush = new SolidColorBrush(Windows.UI.Colors.Transparent);
-
-        /// <summary>
-        /// Reference back to the "root" page of the app.
-        /// </summary>
-        private MainPage rootPage;
 
         /// <summary>
         /// Holds the current scenario state value.
@@ -99,7 +93,7 @@ namespace SDKTemplate
         /// <summary>
         /// Initializes a new instance of the <see cref="TrackFacesInWebcam"/> class.
         /// </summary>
-        public TrackFacesInWebcam()
+        public MainPage()
         {
             this.InitializeComponent();
 
@@ -129,8 +123,6 @@ namespace SDKTemplate
         /// <param name="e">Event data</param>
         protected override async void OnNavigatedTo(NavigationEventArgs e)
         {
-            this.rootPage = MainPage.Current;
-
             if (ApplicationData.Current.LocalSettings.Values.ContainsKey("ApiKey"))
             {
                 ApiKey.Text = ApplicationData.Current.LocalSettings.Values["ApiKey"].ToString();
@@ -201,12 +193,12 @@ namespace SDKTemplate
             catch (System.UnauthorizedAccessException)
             {
                 // If the user has disabled their webcam this exception is thrown; provide a descriptive message to inform the user of this fact.
-                this.rootPage.NotifyUser("Webcam is disabled or access to the webcam is disabled for this app.\nEnsure Privacy Settings allow webcam usage.", NotifyType.ErrorMessage);
+                NotifyUser("Webcam is disabled or access to the webcam is disabled for this app.\nEnsure Privacy Settings allow webcam usage.", NotifyType.ErrorMessage);
                 successful = false;
             }
             catch (Exception ex)
             {
-                this.rootPage.NotifyUser(ex.ToString(), NotifyType.ErrorMessage);
+                NotifyUser(ex.ToString(), NotifyType.ErrorMessage);
                 successful = false;
             }
 
@@ -344,7 +336,7 @@ namespace SDKTemplate
             {
                 var ignored = this.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
                 {
-                    this.rootPage.NotifyUser(ex.ToString(), NotifyType.ErrorMessage);
+                    NotifyUser(ex.ToString(), NotifyType.ErrorMessage);
                 });
             }
             finally
@@ -470,14 +462,69 @@ namespace SDKTemplate
         {
             if (this.currentState == ScenarioState.Streaming)
             {
-                this.rootPage.NotifyUser(string.Empty, NotifyType.StatusMessage);
+                NotifyUser(string.Empty, NotifyType.StatusMessage);
                 this.ChangeScenarioState(ScenarioState.Idle);
             }
             else
             {
-                this.rootPage.NotifyUser(string.Empty, NotifyType.StatusMessage);
+                NotifyUser(string.Empty, NotifyType.StatusMessage);
                 this.ChangeScenarioState(ScenarioState.Streaming);
             }
         }
-    }
+
+      /// <summary>
+      /// Display a message to the user.
+      /// This method may be called from any thread.
+      /// </summary>
+      /// <param name="strMessage"></param>
+      /// <param name="type"></param>
+      private void NotifyUser(string strMessage, NotifyType type)
+      {
+         // If called from the UI thread, then update immediately.
+         // Otherwise, schedule a task on the UI thread to perform the update.
+         if (Dispatcher.HasThreadAccess)
+         {
+            UpdateStatus(strMessage, type);
+         }
+         else
+         {
+            var task = Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () => UpdateStatus(strMessage, type));
+         }
+      }
+
+      private void UpdateStatus(string strMessage, NotifyType type)
+      {
+         switch (type)
+         {
+            case NotifyType.StatusMessage:
+               StatusBorder.Background = new SolidColorBrush(Windows.UI.Colors.Green);
+               break;
+            case NotifyType.ErrorMessage:
+               StatusBorder.Background = new SolidColorBrush(Windows.UI.Colors.Red);
+               break;
+         }
+
+         StatusBlock.Text = strMessage;
+
+         // Collapse the StatusBlock if it has no text to conserve real estate.
+         StatusBorder.Visibility = (StatusBlock.Text != String.Empty) ? Visibility.Visible : Visibility.Collapsed;
+         if (StatusBlock.Text != String.Empty)
+         {
+            StatusBorder.Visibility = Visibility.Visible;
+            StatusPanel.Visibility = Visibility.Visible;
+         }
+         else
+         {
+            StatusBorder.Visibility = Visibility.Collapsed;
+            StatusPanel.Visibility = Visibility.Collapsed;
+         }
+
+         // Raise an event if necessary to enable a screen reader to announce the status update.
+         var peer = FrameworkElementAutomationPeer.FromElement(StatusBlock);
+         if (peer != null)
+         {
+            peer.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+         }
+      }
+   }
 }
