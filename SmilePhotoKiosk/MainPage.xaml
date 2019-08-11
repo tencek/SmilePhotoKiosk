@@ -15,37 +15,37 @@
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
-            <StackPanel x:Name="TopPanel" Margin="0,0,0,10">
+            <StackPanel x:Name="TopPanel" Margin="0,0,0,8">
             <StackPanel x:Name="Anger" Orientation="Horizontal">
-               <TextBlock Text="Anger" Width="80" VerticalAlignment="Center" Margin="10,0,10,0"/>
+               <TextBlock Text="Anger" Width="80" VerticalAlignment="Center" Margin="8,0,8,0"/>
                <ProgressBar Name="progress_anger" VerticalAlignment="Center" Maximum="100" Value="0" Width="1000" />
             </StackPanel>
             <StackPanel x:Name="Contempt" Orientation="Horizontal">
-               <TextBlock Text="Contempt" Width="80" VerticalAlignment="Center" Margin="10,0,10,0"/>
+               <TextBlock Text="Contempt" Width="80" VerticalAlignment="Center" Margin="8,0,8,0"/>
                <ProgressBar Name="progress_contempt" VerticalAlignment="Center" Maximum="100" Value="0" Width="1000" />
             </StackPanel>
             <StackPanel x:Name="Disgust" Orientation="Horizontal">
-               <TextBlock Text="Disgust" Width="80" VerticalAlignment="Center" Margin="10,0,10,0"/>
+               <TextBlock Text="Disgust" Width="80" VerticalAlignment="Center" Margin="8,0,8,0"/>
                <ProgressBar Name="progress_disgust" VerticalAlignment="Center" Maximum="100" Value="0" Width="1000" />
             </StackPanel>
             <StackPanel x:Name="Fear" Orientation="Horizontal">
-               <TextBlock Text="Fear" Width="80" VerticalAlignment="Center" Margin="10,0,10,0"/>
+               <TextBlock Text="Fear" Width="80" VerticalAlignment="Center" Margin="8,0,8,0"/>
                <ProgressBar Name="progress_fear" VerticalAlignment="Center" Maximum="100" Value="0" Width="1000" />
             </StackPanel>
             <StackPanel x:Name="Happiness" Orientation="Horizontal">
-               <TextBlock Text="Happiness" Width="80" VerticalAlignment="Center" Margin="10,0,10,0"/>
+               <TextBlock Text="Happiness" Width="80" VerticalAlignment="Center" Margin="8,0,8,0"/>
                <ProgressBar Name="progress_happiness" VerticalAlignment="Center" Maximum="100" Value="0" Width="1000" />
             </StackPanel>
             <StackPanel x:Name="Sadness" Orientation="Horizontal">
-               <TextBlock Text="Sadness" Width="80" VerticalAlignment="Center" Margin="10,0,10,0"/>
+               <TextBlock Text="Sadness" Width="80" VerticalAlignment="Center" Margin="8,0,8,0"/>
                <ProgressBar Name="progress_sadness" VerticalAlignment="Center" Maximum="100" Value="0" Width="1000" />
             </StackPanel>
             <StackPanel x:Name="Surprise" Orientation="Horizontal">
-               <TextBlock Text="Surprise" Width="80" VerticalAlignment="Center" Margin="10,0,10,0"/>
+               <TextBlock Text="Surprise" Width="80" VerticalAlignment="Center" Margin="8,0,8,0"/>
                <ProgressBar Name="progress_surprise" VerticalAlignment="Center" Maximum="100" Value="0" Width="1000" />
             </StackPanel>
             <StackPanel x:Name="Smile" Orientation="Horizontal">
-               <TextBlock Text="Smile" Width="80" VerticalAlignment="Center" Margin="10,0,10,0"/>
+               <TextBlock Text="Smile" Width="80" VerticalAlignment="Center" Margin="8,0,8,0"/>
                <ProgressBar Name="progress_smile" VerticalAlignment="Center" Maximum="100" Value="0" Width="1000" />
             </StackPanel>
          </StackPanel>
@@ -57,13 +57,13 @@
                 </Grid.RowDefinitions>
 
                 <StackPanel Orientation="Horizontal" Grid.Row="0">
-                  <TextBlock Text="Api Key:" VerticalAlignment="Center" Margin="10,0,5,0"/>
+                  <TextBlock Text="Api Key:" VerticalAlignment="Center" Margin="8,0,4,0"/>
                   <TextBox Name="ApiKey" Width="400"  Text="API key"/>
-                  <Button Name="CameraStreamingButton" Content="Start Streaming" Click="CameraStreamingButton_Click" Margin="10, 0, 10, 0"/>
+                  <Button Name="CameraStreamingButton" Content="Start Streaming" Click="CameraStreamingButton_Click" Margin="8, 0, 8, 0"/>
                 </StackPanel>
 
-                <CaptureElement Name="CamPreview" Grid.Row="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Stretch="Fill" Margin="0,10,0,0" />
-                <Canvas Name="VisualizationCanvas" Grid.Row="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="0,10,0,0" />
+                <CaptureElement Name="CamPreview" Grid.Row="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Stretch="Fill" Margin="0,8,0,0" />
+                <Canvas Name="VisualizationCanvas" Grid.Row="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="0,8,0,0" />
             </Grid>
 
             <!-- Status Block for providing messages to the user.  Use the
@@ -73,7 +73,7 @@
                         <ScrollViewer VerticalScrollMode="Auto"  VerticalScrollBarVisibility="Auto" MaxHeight="200">
                             <!-- Use LiveSetting to enable screen readers to announce the status update. -->
                             <TextBlock x:Name="StatusBlock" FontWeight="Bold" AutomationProperties.LiveSetting="Assertive"
-                                   MaxWidth="{Binding ElementName=Splitter, Path=ActualWidth}" Margin="10,10,10,20" TextWrapping="Wrap"  />
+                                   MaxWidth="{Binding ElementName=Splitter, Path=ActualWidth}" Margin="8,8,8,20" TextWrapping="Wrap"  />
                         </ScrollViewer>
                     </Border>
                 </StackPanel>
