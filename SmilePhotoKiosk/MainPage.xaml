@@ -53,17 +53,21 @@
             <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Grid.Row="1">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
                 <StackPanel Orientation="Horizontal" Grid.Row="0">
-                  <TextBlock Text="Api Key:" VerticalAlignment="Center" Margin="8,0,4,0"/>
-                  <TextBox Name="ApiKey" Width="400"  Text="API key"/>
-                  <Button Name="CameraStreamingButton" Content="Start Streaming" Click="CameraStreamingButton_Click" Margin="8, 0, 8, 0"/>
+                  <TextBlock Text="Api key:" VerticalAlignment="Center" Margin="8,0,4,0"/>
+                  <TextBox Name="ApiKey" HorizontalAlignment="Stretch" Text="API key"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Grid.Row="1">
+                  <TextBlock Text="Api end-point:" VerticalAlignment="Center" Margin="8,0,4,0"/>
+                  <TextBox Name="ApiEndPoint" HorizontalAlignment="Stretch" Text="API end-point"/>
                 </StackPanel>
 
-                <CaptureElement Name="CamPreview" Grid.Row="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Stretch="Fill" Margin="0,8,0,0" />
-                <Canvas Name="VisualizationCanvas" Grid.Row="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="0,8,0,0" />
+                <CaptureElement Name="CamPreview" Grid.Row="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Stretch="Fill" Margin="0,8,0,0" />
+                <Canvas Name="VisualizationCanvas" Grid.Row="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="0,8,0,0" />
             </Grid>
 
             <!-- Status Block for providing messages to the user.  Use the
