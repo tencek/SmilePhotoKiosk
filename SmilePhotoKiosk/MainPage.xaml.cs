@@ -56,11 +56,6 @@ namespace SmilePhotoKiosk
       private readonly SolidColorBrush fillBrush = new SolidColorBrush(Windows.UI.Colors.Transparent);
 
       /// <summary>
-      /// Holds the current scenario state value.
-      /// </summary>
-      private ScenarioState currentState;
-
-      /// <summary>
       /// References a MediaCapture instance; is null when not in Streaming state.
       /// </summary>
       private MediaCapture mediaCapture;
@@ -76,11 +71,6 @@ namespace SmilePhotoKiosk
       private FaceTracker faceTracker;
 
       /// <summary>
-      /// A periodic timer to execute FaceTracker on preview frames
-      /// </summary>
-      private ThreadPoolTimer frameProcessingTimer;
-
-      /// <summary>
       /// Semaphore to ensure FaceTracking logic only executes one at a time
       /// </summary>
       private SemaphoreSlim frameProcessingSemaphore = new SemaphoreSlim(1);
@@ -93,25 +83,7 @@ namespace SmilePhotoKiosk
       public MainPage()
       {
          this.InitializeComponent();
-
-         this.currentState = ScenarioState.Idle;
          App.Current.Suspending += this.OnSuspending;
-      }
-
-      /// <summary>
-      /// Values for identifying and controlling scenario states.
-      /// </summary>
-      private enum ScenarioState
-      {
-         /// <summary>
-         /// Display is blank - default state.
-         /// </summary>
-         Idle,
-
-         /// <summary>
-         /// Webcam is actively engaged and a live video stream is displayed.
-         /// </summary>
-         Streaming
       }
 
       /// <summary>
@@ -136,7 +108,15 @@ namespace SmilePhotoKiosk
             this.faceTracker = await FaceTracker.CreateAsync();
          }
 
-         //await CreateFaceDetectionEffectAsync();
+         this.faceClient = new FaceClient(
+             new ApiKeyServiceClientCredentials(ApiKey.Text),
+             new System.Net.Http.DelegatingHandler[] { })
+         {
+            Endpoint = ApiEndPoint.Text
+         };
+
+         await this.StartWebcamStreaming();
+         await this.CreateFaceDetectionEffectAsync();
       }
 
       /// <summary>
@@ -167,11 +147,20 @@ namespace SmilePhotoKiosk
          _faceDetectionEffect.Enabled = true;
       }
 
-      private void FaceDetectionEffect_FaceDetected(FaceDetectionEffect sender, FaceDetectedEventArgs args)
+      private async void FaceDetectionEffect_FaceDetected(FaceDetectionEffect sender, FaceDetectedEventArgs args)
       {
-         throw new NotImplementedException();
+         // Ask the UI thread to render the face bounding boxes
+         //await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () => HighlightDetectedFaces(args.ResultFrame.DetectedFaces));
+         //var previewFrameSize = new Windows.Foundation.Size(previewFrame.SoftwareBitmap.PixelWidth, previewFrame.SoftwareBitmap.PixelHeight);
+         //var ignored = this.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+         //{
+         //   //this.SetupVisualization(previewFrameSize, faces);
+         //   this.SetupProgressBar(anger, contempt, disgust, fear, happiness, sadness, surprise, smile);
+         //});
+         var x = args.ResultFrame.ExtendedProperties;
+         var detectedFaces = args.ResultFrame.DetectedFaces;
+         await this.ProcessCurrentVideoFrameAsync(detectedFaces);
       }
-
 
       /// <summary>
       /// Responds to App Suspend event to stop/release MediaCapture object if it's running and return to Idle state.
@@ -180,21 +169,21 @@ namespace SmilePhotoKiosk
       /// <param name="e">Event data</param>
       private void OnSuspending(object sender, Windows.ApplicationModel.SuspendingEventArgs e)
       {
-         if (this.currentState == ScenarioState.Streaming)
-         {
-            var deferral = e.SuspendingOperation.GetDeferral();
-            try
-            {
-               this.ChangeScenarioState(ScenarioState.Idle);
-            }
-            finally
-            {
-               deferral.Complete();
-            }
-         }
-
          ApplicationData.Current.LocalSettings.Values["ApiKey"] = ApiKey.Text;
          ApplicationData.Current.LocalSettings.Values["ApiEndPoint"] = ApiEndPoint.Text;
+
+         var deferral = e.SuspendingOperation.GetDeferral();
+         try
+         {
+            this.ShutdownWebCam();
+            this.VisualizationCanvas.Children.Clear();
+            this.faceClient.Dispose();
+            this.faceClient = null;
+         }
+         finally
+         {
+            deferral.Complete();
+         }
       }
 
       /// <summary>
@@ -225,9 +214,6 @@ namespace SmilePhotoKiosk
             // NOTE: CaptureElement's Source must be set before streaming is started.
             this.CamPreview.Source = this.mediaCapture;
             await this.mediaCapture.StartPreviewAsync();
-
-            TimeSpan timerInterval = TimeSpan.FromMilliseconds(200);
-            this.frameProcessingTimer = Windows.System.Threading.ThreadPoolTimer.CreatePeriodicTimer(new Windows.System.Threading.TimerElapsedHandler(ProcessCurrentVideoFrameAsync), timerInterval);
          }
          catch (System.UnauthorizedAccessException)
          {
@@ -249,11 +235,6 @@ namespace SmilePhotoKiosk
       /// </summary>
       private async void ShutdownWebCam()
       {
-         if (this.frameProcessingTimer != null)
-         {
-            this.frameProcessingTimer.Cancel();
-         }
-
          if (this.mediaCapture != null)
          {
             if (this.mediaCapture.CameraStreamState == Windows.Media.Devices.CameraStreamState.Streaming)
@@ -270,7 +251,6 @@ namespace SmilePhotoKiosk
             this.mediaCapture.Dispose();
          }
 
-         this.frameProcessingTimer = null;
          this.CamPreview.Source = null;
          this.mediaCapture = null;
       }
@@ -284,13 +264,8 @@ namespace SmilePhotoKiosk
       /// take longer to process.
       /// </remarks>
       /// <param name="timer">Timer object invoking this call</param>
-      private async void ProcessCurrentVideoFrameAsync(ThreadPoolTimer timer)
+      private async Task ProcessCurrentVideoFrameAsync(IReadOnlyList<LocalDetectedFace> localFaces)
       {
-         if (this.currentState != ScenarioState.Streaming)
-         {
-            return;
-         }
-
          // If a lock is being held it means we're still waiting for processing work on the previous frame to complete.
          // In this situation, don't wait on the semaphore but exit immediately.
          if (!frameProcessingSemaphore.Wait(0))
@@ -300,7 +275,6 @@ namespace SmilePhotoKiosk
 
          try
          {
-            IList<LocalDetectedFace> faces = null;
             var anger = 0.0;
             var contempt = 0.0;
             var disgust = 0.0;
@@ -317,17 +291,7 @@ namespace SmilePhotoKiosk
             {
                await this.mediaCapture.GetPreviewFrameAsync(previewFrame);
 
-               // The returned VideoFrame should be in the supported NV12 format but we need to verify this.
-               if (FaceDetector.IsBitmapPixelFormatSupported(previewFrame.SoftwareBitmap.BitmapPixelFormat))
-               {
-                  faces = await this.faceTracker.ProcessNextFrameAsync(previewFrame);
-               }
-               else
-               {
-                  throw new System.NotSupportedException("PixelFormat '" + InputPixelFormat.ToString() + "' is not supported by FaceDetector");
-               }
-
-               if (faces.Count > 0)
+               if (localFaces.Count > 0)
                {
                   IList<FaceAttributeType> faceAttributes =
                       new FaceAttributeType[]
@@ -344,18 +308,18 @@ namespace SmilePhotoKiosk
 
                      await mediaCapture.CapturePhotoToStreamAsync(ImageEncodingProperties.CreateJpeg(), captureStream);
                      captureStream.Seek(0);
-                     IList<RemoteDetectedFace> faceList =
+                     IList<RemoteDetectedFace> remoteFaces =
                              await faceClient.Face.DetectWithStreamAsync(captureStream.AsStreamForRead(), true, true, faceAttributes);
-                     if (faceList.Count > 0)
+                     if (remoteFaces.Count > 0)
                      {
-                        anger = evaluate(faceList, (x => x.Emotion.Anger));
-                        contempt = evaluate(faceList, (x => x.Emotion.Contempt));
-                        disgust = evaluate(faceList, (x => x.Emotion.Disgust));
-                        fear = evaluate(faceList, (x => x.Emotion.Fear));
-                        happiness = evaluate(faceList, (x => x.Emotion.Happiness));
-                        sadness = evaluate(faceList, (x => x.Emotion.Sadness));
-                        surprise = evaluate(faceList, (x => x.Emotion.Surprise));
-                        smile = evaluate(faceList, (x => x.Smile));
+                        anger = evaluate(remoteFaces, (x => x.Emotion.Anger));
+                        contempt = evaluate(remoteFaces, (x => x.Emotion.Contempt));
+                        disgust = evaluate(remoteFaces, (x => x.Emotion.Disgust));
+                        fear = evaluate(remoteFaces, (x => x.Emotion.Fear));
+                        happiness = evaluate(remoteFaces, (x => x.Emotion.Happiness));
+                        sadness = evaluate(remoteFaces, (x => x.Emotion.Sadness));
+                        surprise = evaluate(remoteFaces, (x => x.Emotion.Surprise));
+                        smile = evaluate(remoteFaces, (x => x.Smile));
                      }
                   }
                }
@@ -364,7 +328,7 @@ namespace SmilePhotoKiosk
                var previewFrameSize = new Windows.Foundation.Size(previewFrame.SoftwareBitmap.PixelWidth, previewFrame.SoftwareBitmap.PixelHeight);
                var ignored = this.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
                {
-                  //this.SetupVisualization(previewFrameSize, faces);
+                  this.SetupVisualization(previewFrameSize, localFaces);
                   this.SetupProgressBar(anger, contempt, disgust, fear, happiness, sadness, surprise, smile);
                });
             }
@@ -400,14 +364,14 @@ namespace SmilePhotoKiosk
       /// </summary>
       /// <param name="framePixelSize">Width and height (in pixels) of the video capture frame</param>
       /// <param name="foundFaces">List of detected faces; output from FaceTracker</param>
-      private void SetupVisualization(Windows.Foundation.Size framePixelSize, IList<LocalDetectedFace> foundFaces)
+      private void SetupVisualization(Windows.Foundation.Size framePixelSize, IReadOnlyList<LocalDetectedFace> foundFaces)
       {
          this.VisualizationCanvas.Children.Clear();
 
          double actualWidth = this.VisualizationCanvas.ActualWidth;
          double actualHeight = this.VisualizationCanvas.ActualHeight;
 
-         if (this.currentState == ScenarioState.Streaming && foundFaces != null && actualWidth != 0 && actualHeight != 0)
+         if (foundFaces != null && actualWidth != 0 && actualHeight != 0)
          {
             double widthScale = framePixelSize.Width / actualWidth;
             double heightScale = framePixelSize.Height / actualHeight;
@@ -431,46 +395,6 @@ namespace SmilePhotoKiosk
       }
 
       /// <summary>
-      /// Manages the scenario's internal state. Invokes the internal methods and updates the UI according to the
-      /// passed in state value. Handles failures and resets the state if necessary.
-      /// </summary>
-      /// <param name="newState">State to switch to</param>
-      private async void ChangeScenarioState(ScenarioState newState)
-      {
-         // Disable UI while state change is in progress
-         switch (newState)
-         {
-            case ScenarioState.Idle:
-
-               this.ShutdownWebCam();
-
-               this.VisualizationCanvas.Children.Clear();
-               this.currentState = newState;
-               this.faceClient.Dispose();
-               this.faceClient = null;
-               break;
-
-            case ScenarioState.Streaming:
-
-               faceClient = new FaceClient(
-                   new ApiKeyServiceClientCredentials(ApiKey.Text),
-                   new System.Net.Http.DelegatingHandler[] { })
-               {
-                  Endpoint = ApiEndPoint.Text
-               };
-               if (!await this.StartWebcamStreaming())
-               {
-                  this.ChangeScenarioState(ScenarioState.Idle);
-                  break;
-               }
-
-               this.VisualizationCanvas.Children.Clear();
-               this.currentState = newState;
-               break;
-         }
-      }
-
-      /// <summary>
       /// Handles MediaCapture stream failures by shutting down streaming and returning to Idle state.
       /// </summary>
       /// <param name="sender">The source of the event, i.e. our MediaCapture object</param>
@@ -481,27 +405,7 @@ namespace SmilePhotoKiosk
          // and instead need to schedule the state change on the UI thread.
          var ignored = this.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
          {
-            ChangeScenarioState(ScenarioState.Idle);
          });
-      }
-
-      /// <summary>
-      /// Handles "streaming" button clicks to start/stop webcam streaming.
-      /// </summary>
-      /// <param name="sender">Button user clicked</param>
-      /// <param name="e">Event data</param>
-      private void CameraStreamingButton_Click(object sender, RoutedEventArgs e)
-      {
-         if (this.currentState == ScenarioState.Streaming)
-         {
-            NotifyUser(string.Empty, NotifyType.StatusMessage);
-            this.ChangeScenarioState(ScenarioState.Idle);
-         }
-         else
-         {
-            NotifyUser(string.Empty, NotifyType.StatusMessage);
-            this.ChangeScenarioState(ScenarioState.Streaming);
-         }
       }
 
       /// <summary>
