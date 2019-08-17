@@ -77,6 +77,11 @@ namespace SmilePhotoKiosk
 
       private IFaceClient faceClient;
 
+      // Folder in which the captures will be stored (initialized in InitializeCameraAsync)
+      private StorageFolder captureFolder = null;
+
+      private readonly double smileThreshold = 0.95;
+
       /// <summary>
       /// Initializes a new instance of the <see cref="TrackFacesInWebcam"/> class.
       /// </summary>
@@ -114,6 +119,10 @@ namespace SmilePhotoKiosk
          {
             Endpoint = ApiEndPoint.Text
          };
+
+         var picturesLibrary = await StorageLibrary.GetLibraryAsync(KnownLibraryId.Pictures);
+         // Fall back to the local app storage if the Pictures Library is not available
+         captureFolder = picturesLibrary.SaveFolder ?? ApplicationData.Current.LocalFolder;
 
          await this.StartWebcamStreaming();
          await this.CreateFaceDetectionEffectAsync();
@@ -286,7 +295,7 @@ namespace SmilePhotoKiosk
 
             // Create a VideoFrame object specifying the pixel format we want our capture image to be (NV12 bitmap in this case).
             // GetPreviewFrame will convert the native webcam frame into this format.
-            const BitmapPixelFormat InputPixelFormat = BitmapPixelFormat.Nv12;
+            const BitmapPixelFormat InputPixelFormat = BitmapPixelFormat.Bgra8;
             using (VideoFrame previewFrame = new VideoFrame(InputPixelFormat, (int)this.videoProperties.Width, (int)this.videoProperties.Height))
             {
                await this.mediaCapture.GetPreviewFrameAsync(previewFrame);
@@ -331,6 +340,12 @@ namespace SmilePhotoKiosk
                   this.SetupVisualization(previewFrameSize, localFaces);
                   this.SetupProgressBar(anger, contempt, disgust, fear, happiness, sadness, surprise, smile);
                });
+
+               if (smile > smileThreshold)
+               {
+                  var file = await captureFolder.CreateFileAsync("SmileFace.jpg", CreationCollisionOption.GenerateUniqueName);
+                  await SaveSoftwareBitmapAsync(previewFrame.SoftwareBitmap, file);
+               }
             }
          }
          catch (Exception ex)
@@ -462,5 +477,24 @@ namespace SmilePhotoKiosk
             peer.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
          }
       }
+
+      /// <summary>
+      /// Saves a SoftwareBitmap to the specified StorageFile
+      /// </summary>
+      /// <param name="bitmap">SoftwareBitmap to save</param>
+      /// <param name="file">Target StorageFile to save to</param>
+      /// <returns></returns>
+      private static async Task SaveSoftwareBitmapAsync(SoftwareBitmap bitmap, StorageFile file)
+      {
+         using (var outputStream = await file.OpenAsync(FileAccessMode.ReadWrite))
+         {
+            var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.JpegEncoderId, outputStream);
+
+            // Grab the data from the SoftwareBitmap
+            encoder.SetSoftwareBitmap(bitmap);
+            await encoder.FlushAsync();
+         }
+      }
+
    }
 }
