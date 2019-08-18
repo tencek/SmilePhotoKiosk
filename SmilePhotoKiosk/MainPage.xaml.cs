@@ -305,8 +305,7 @@ namespace SmilePhotoKiosk
                   IList<FaceAttributeType> faceAttributes =
                       new FaceAttributeType[]
                       {
-                                    FaceAttributeType.Gender, FaceAttributeType.Age,
-                                    FaceAttributeType.Smile, FaceAttributeType.Emotion
+                         FaceAttributeType.Smile, FaceAttributeType.Emotion
                       };
                   using (var captureStream = new InMemoryRandomAccessStream())
                   {
@@ -529,7 +528,7 @@ namespace SmilePhotoKiosk
                      {
                         for (int j = 0; j < outputBufferLayout.Width; j++)
                         {
-                           dataOutBytes[outputBufferLayout.StartIndex + outputBufferLayout.Stride * i + 4 * j + 0] = 
+                           dataOutBytes[outputBufferLayout.StartIndex + outputBufferLayout.Stride * i + 4 * j + 0] =
                               dataInBytes[inputBufferLayout.StartIndex + inputBufferLayout.Stride * (rect.Top + i) + 4 * (rect.Left + j) + 0];
                            dataOutBytes[outputBufferLayout.StartIndex + outputBufferLayout.Stride * i + 4 * j + 1] =
                               dataInBytes[inputBufferLayout.StartIndex + inputBufferLayout.Stride * (rect.Top + i) + 4 * (rect.Left + j) + 1];
