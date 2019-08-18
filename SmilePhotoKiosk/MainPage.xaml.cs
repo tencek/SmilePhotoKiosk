@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Linq;
 using System.IO;
+using System.Runtime.InteropServices;
 
 using Windows.UI.Core;
 using Windows.UI.Xaml;
@@ -34,6 +35,14 @@ namespace SmilePhotoKiosk
       StatusMessage,
       ErrorMessage
    };
+
+   [ComImport]
+   [Guid("5b0d3235-4dba-4d44-865e-8f1d0e4fd04d")]
+   [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+   unsafe interface IMemoryBufferByteAccess
+   {
+      void GetBuffer(out byte* buffer, out uint capacity);
+   }
 
    /// <summary>
    /// An empty page that can be used on its own or navigated to within a Frame.
@@ -284,18 +293,9 @@ namespace SmilePhotoKiosk
 
          try
          {
-            var anger = 0.0;
-            var contempt = 0.0;
-            var disgust = 0.0;
-            var fear = 0.0;
-            var happiness = 0.0;
-            var sadness = 0.0;
-            var surprise = 0.0;
-            var smile = 0.0;
-
             // Create a VideoFrame object specifying the pixel format we want our capture image to be (NV12 bitmap in this case).
             // GetPreviewFrame will convert the native webcam frame into this format.
-            const BitmapPixelFormat InputPixelFormat = BitmapPixelFormat.Bgra8;
+            const BitmapPixelFormat InputPixelFormat = BitmapPixelFormat.Rgba8;
             using (VideoFrame previewFrame = new VideoFrame(InputPixelFormat, (int)this.videoProperties.Width, (int)this.videoProperties.Height))
             {
                await this.mediaCapture.GetPreviewFrameAsync(previewFrame);
@@ -310,41 +310,38 @@ namespace SmilePhotoKiosk
                       };
                   using (var captureStream = new InMemoryRandomAccessStream())
                   {
-                     double evaluate(IList<RemoteDetectedFace> detectedFaceList, Func<FaceAttributes, double?> selector) =>
-                         (from detectedFace in detectedFaceList
-                          where selector(detectedFace.FaceAttributes).HasValue
-                          select selector(detectedFace.FaceAttributes).Value).Max();
-
                      await mediaCapture.CapturePhotoToStreamAsync(ImageEncodingProperties.CreateJpeg(), captureStream);
                      captureStream.Seek(0);
                      IList<RemoteDetectedFace> remoteFaces =
                              await faceClient.Face.DetectWithStreamAsync(captureStream.AsStreamForRead(), true, true, faceAttributes);
                      if (remoteFaces.Count > 0)
                      {
-                        anger = evaluate(remoteFaces, (x => x.Emotion.Anger));
-                        contempt = evaluate(remoteFaces, (x => x.Emotion.Contempt));
-                        disgust = evaluate(remoteFaces, (x => x.Emotion.Disgust));
-                        fear = evaluate(remoteFaces, (x => x.Emotion.Fear));
-                        happiness = evaluate(remoteFaces, (x => x.Emotion.Happiness));
-                        sadness = evaluate(remoteFaces, (x => x.Emotion.Sadness));
-                        surprise = evaluate(remoteFaces, (x => x.Emotion.Surprise));
-                        smile = evaluate(remoteFaces, (x => x.Smile));
+                        var remoteFace = remoteFaces[0];
+
+                        // Create our visualization using the frame dimensions and face results but run it on the UI thread.
+                        var previewFrameSize = new Windows.Foundation.Size(previewFrame.SoftwareBitmap.PixelWidth, previewFrame.SoftwareBitmap.PixelHeight);
+                        var ignored = this.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                        {
+                           this.SetupVisualization(previewFrameSize, localFaces);
+                           this.SetupProgressBar(
+                              remoteFace.FaceAttributes.Emotion.Anger,
+                              remoteFace.FaceAttributes.Emotion.Contempt,
+                              remoteFace.FaceAttributes.Emotion.Disgust,
+                              remoteFace.FaceAttributes.Emotion.Fear,
+                              remoteFace.FaceAttributes.Emotion.Happiness,
+                              remoteFace.FaceAttributes.Emotion.Sadness,
+                              remoteFace.FaceAttributes.Emotion.Surprise,
+                              remoteFace.FaceAttributes.Smile.Value);
+                        });
+
+                        if (remoteFace.FaceAttributes.Smile.Value > smileThreshold)
+                        {
+                           var file = await captureFolder.CreateFileAsync("SmileFace.jpg", CreationCollisionOption.GenerateUniqueName);
+                           var croppedBitmap = CropImageByRect(previewFrame.SoftwareBitmap, remoteFace.FaceRectangle);
+                           await SaveSoftwareBitmapAsync(croppedBitmap, file);
+                        }
                      }
                   }
-               }
-
-               // Create our visualization using the frame dimensions and face results but run it on the UI thread.
-               var previewFrameSize = new Windows.Foundation.Size(previewFrame.SoftwareBitmap.PixelWidth, previewFrame.SoftwareBitmap.PixelHeight);
-               var ignored = this.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
-               {
-                  this.SetupVisualization(previewFrameSize, localFaces);
-                  this.SetupProgressBar(anger, contempt, disgust, fear, happiness, sadness, surprise, smile);
-               });
-
-               if (smile > smileThreshold)
-               {
-                  var file = await captureFolder.CreateFileAsync("SmileFace.jpg", CreationCollisionOption.GenerateUniqueName);
-                  await SaveSoftwareBitmapAsync(previewFrame.SoftwareBitmap, file);
                }
             }
          }
@@ -490,10 +487,64 @@ namespace SmilePhotoKiosk
          {
             var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.JpegEncoderId, outputStream);
 
+            var propertySet = new Windows.Graphics.Imaging.BitmapPropertySet();
+            var orientationValue = new Windows.Graphics.Imaging.BitmapTypedValue(
+                1, // Defined as EXIF orientation = "normal"
+                Windows.Foundation.PropertyType.UInt16
+                );
+            propertySet.Add("System.Photo.Orientation", orientationValue);
+
+            await encoder.BitmapProperties.SetPropertiesAsync(propertySet);
+
             // Grab the data from the SoftwareBitmap
             encoder.SetSoftwareBitmap(bitmap);
             await encoder.FlushAsync();
          }
+      }
+
+      private unsafe SoftwareBitmap CropImageByRect(SoftwareBitmap inputBitmap, FaceRectangle rect)
+      {
+         var outputBitmap = new SoftwareBitmap(inputBitmap.BitmapPixelFormat, rect.Width, rect.Height, inputBitmap.BitmapAlphaMode);
+
+         using (BitmapBuffer inputBuffer = inputBitmap.LockBuffer(BitmapBufferAccessMode.Read))
+         {
+            using (BitmapBuffer outputBuffer = outputBitmap.LockBuffer(BitmapBufferAccessMode.Write))
+            {
+               using (var inputReference = inputBuffer.CreateReference())
+               {
+                  byte* dataInBytes;
+                  uint dataInCapacity;
+                  ((IMemoryBufferByteAccess)inputReference).GetBuffer(out dataInBytes, out dataInCapacity);
+                  BitmapPlaneDescription inputBufferLayout = inputBuffer.GetPlaneDescription(0);
+
+                  using (var outputReference = outputBuffer.CreateReference())
+                  {
+                     byte* dataOutBytes;
+                     uint dataOutCapacity;
+                     ((IMemoryBufferByteAccess)outputReference).GetBuffer(out dataOutBytes, out dataOutCapacity);
+
+                     // Fill-in the BGRA plane
+                     BitmapPlaneDescription outputBufferLayout = outputBuffer.GetPlaneDescription(0);
+                     for (int i = 0; i < outputBufferLayout.Height; i++)
+                     {
+                        for (int j = 0; j < outputBufferLayout.Width; j++)
+                        {
+                           dataOutBytes[outputBufferLayout.StartIndex + outputBufferLayout.Stride * i + 4 * j + 0] = 
+                              dataInBytes[inputBufferLayout.StartIndex + inputBufferLayout.Stride * (rect.Top + i) + 4 * (rect.Left + j) + 0];
+                           dataOutBytes[outputBufferLayout.StartIndex + outputBufferLayout.Stride * i + 4 * j + 1] =
+                              dataInBytes[inputBufferLayout.StartIndex + inputBufferLayout.Stride * (rect.Top + i) + 4 * (rect.Left + j) + 1];
+                           dataOutBytes[outputBufferLayout.StartIndex + outputBufferLayout.Stride * i + 4 * j + 2] =
+                              dataInBytes[inputBufferLayout.StartIndex + inputBufferLayout.Stride * (rect.Top + i) + 4 * (rect.Left + j) + 2];
+                           dataOutBytes[outputBufferLayout.StartIndex + outputBufferLayout.Stride * i + 4 * j + 3] =
+                              dataInBytes[inputBufferLayout.StartIndex + inputBufferLayout.Stride * (rect.Top + i) + 4 * (rect.Left + j) + 3];
+                        }
+                     }
+                  }
+               }
+            }
+         }
+
+         return outputBitmap;
       }
 
    }
