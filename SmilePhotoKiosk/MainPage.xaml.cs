@@ -27,6 +27,7 @@ using Microsoft.Azure.CognitiveServices.Vision.Face.Models;
 using LocalDetectedFace = Windows.Media.FaceAnalysis.DetectedFace;
 using RemoteDetectedFace = Microsoft.Azure.CognitiveServices.Vision.Face.Models.DetectedFace;
 using Windows.Media.Core;
+using Windows.Media.Capture.Frames;
 
 namespace SmilePhotoKiosk
 {
@@ -68,6 +69,7 @@ namespace SmilePhotoKiosk
       /// References a MediaCapture instance; is null when not in Streaming state.
       /// </summary>
       private MediaCapture mediaCapture;
+      private MediaFrameReader mediaFrameReader;
 
       /// <summary>
       /// Cache of properties from the current MediaCapture device which is used for capturing the preview frame.
@@ -134,7 +136,7 @@ namespace SmilePhotoKiosk
          captureFolder = picturesLibrary.SaveFolder ?? ApplicationData.Current.LocalFolder;
 
          await this.StartWebcamStreaming();
-         await this.CreateFaceDetectionEffectAsync();
+         //await this.CreateFaceDetectionEffectAsync();
       }
 
       /// <summary>
@@ -153,7 +155,7 @@ namespace SmilePhotoKiosk
          definition.DetectionMode = FaceDetectionMode.HighPerformance;
 
          // Add the effect to the preview stream
-         var _faceDetectionEffect = (FaceDetectionEffect)await mediaCapture.AddVideoEffectAsync(definition, MediaStreamType.VideoPreview);
+         var _faceDetectionEffect = (FaceDetectionEffect)await this.mediaCapture.AddVideoEffectAsync(definition, MediaStreamType.VideoPreview);
 
          // Register for face detection events
          _faceDetectionEffect.FaceDetected += FaceDetectionEffect_FaceDetected;
@@ -216,13 +218,52 @@ namespace SmilePhotoKiosk
          {
             this.mediaCapture = new MediaCapture();
 
-            // For this scenario, we only need Video (not microphone) so specify this in the initializer.
-            // NOTE: the appxmanifest only declares "webcam" under capabilities and if this is changed to include
-            // microphone (default constructor) you must add "microphone" to the manifest or initialization will fail.
-            MediaCaptureInitializationSettings settings = new MediaCaptureInitializationSettings();
-            settings.StreamingCaptureMode = StreamingCaptureMode.Video;
-            await this.mediaCapture.InitializeAsync(settings);
-            this.mediaCapture.Failed += this.MediaCapture_CameraStreamFailed;
+            var frameSourceGroups = await MediaFrameSourceGroup.FindAllAsync();
+
+            MediaFrameSourceGroup selectedGroup = null;
+            MediaFrameSourceInfo colorSourceInfo = null;
+
+            foreach (var sourceGroup in frameSourceGroups)
+            {
+               foreach (var sourceInfo in sourceGroup.SourceInfos)
+               {
+                  if ((sourceInfo.MediaStreamType == MediaStreamType.VideoPreview || sourceInfo.MediaStreamType == MediaStreamType.VideoRecord)
+                      && sourceInfo.SourceKind == MediaFrameSourceKind.Color)
+                  {
+                     colorSourceInfo = sourceInfo;
+                     break;
+                  }
+               }
+               if (colorSourceInfo != null)
+               {
+                  selectedGroup = sourceGroup;
+                  break;
+               }
+            }
+
+            if (colorSourceInfo != null)
+            {
+               var settings = new MediaCaptureInitializationSettings()
+               {
+                  SourceGroup = selectedGroup,
+                  SharingMode = MediaCaptureSharingMode.ExclusiveControl,
+                  MemoryPreference = MediaCaptureMemoryPreference.Cpu,
+                  StreamingCaptureMode = StreamingCaptureMode.Video
+               };
+
+               await mediaCapture.InitializeAsync(settings);
+
+               this.mediaCapture.Failed += this.MediaCapture_CameraStreamFailed;
+               var colorFrameSource = mediaCapture.FrameSources[colorSourceInfo.Id];
+               var preferredFormat = colorFrameSource.SupportedFormats
+                   .OrderByDescending(x => x.VideoFormat.Width)
+                   .FirstOrDefault(x => x.VideoFormat.Width <= 1920 && x.Subtype.Equals(MediaEncodingSubtypes.Nv12, StringComparison.OrdinalIgnoreCase));
+
+               await colorFrameSource.SetFormatAsync(preferredFormat);
+               this.mediaFrameReader = await this.mediaCapture.CreateFrameReaderAsync(colorFrameSource);
+               this.mediaFrameReader.FrameArrived += MediaFrameReader_FrameArrived;
+               await this.mediaFrameReader.StartAsync();
+            }
 
             // Cache the media properties as we'll need them later.
             var deviceController = this.mediaCapture.VideoDeviceController;
@@ -246,6 +287,10 @@ namespace SmilePhotoKiosk
          }
 
          return successful;
+      }
+
+      private void MediaFrameReader_FrameArrived(MediaFrameReader sender, MediaFrameArrivedEventArgs args)
+      {
       }
 
       /// <summary>
