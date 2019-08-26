@@ -117,69 +117,29 @@ namespace SmilePhotoKiosk
             ApiEndPoint.Text = ApplicationData.Current.LocalSettings.Values["ApiEndPoint"].ToString();
          }
 
-         // The 'await' operation can only be used from within an async method but class constructors
-         // cannot be labeled as async, and so we'll initialize FaceTracker here.
          if (this.faceTracker == null)
          {
             this.faceTracker = await FaceTracker.CreateAsync();
          }
 
-         this.faceClient = new FaceClient(
-             new ApiKeyServiceClientCredentials(ApiKey.Text),
-             new System.Net.Http.DelegatingHandler[] { })
+         if (this.faceClient == null)
          {
-            Endpoint = ApiEndPoint.Text
-         };
+            this.faceClient = new FaceClient(
+                new ApiKeyServiceClientCredentials(ApiKey.Text),
+                new System.Net.Http.DelegatingHandler[] { })
+            {
+               Endpoint = ApiEndPoint.Text
+            };
+         }
 
-         var picturesLibrary = await StorageLibrary.GetLibraryAsync(KnownLibraryId.Pictures);
-         // Fall back to the local app storage if the Pictures Library is not available
-         captureFolder = picturesLibrary.SaveFolder ?? ApplicationData.Current.LocalFolder;
+         if (captureFolder == null)
+         {
+            var picturesLibrary = await StorageLibrary.GetLibraryAsync(KnownLibraryId.Pictures);
+            // Fall back to the local app storage if the Pictures Library is not available
+            captureFolder = picturesLibrary.SaveFolder ?? ApplicationData.Current.LocalFolder;
+         }
 
          await this.StartWebcamStreaming();
-         //await this.CreateFaceDetectionEffectAsync();
-      }
-
-      /// <summary>
-      /// Adds face detection to the preview stream, registers for its events, enables it, and gets the FaceDetectionEffect instance
-      /// </summary>
-      /// <returns></returns>
-      private async Task CreateFaceDetectionEffectAsync()
-      {
-         // Create the definition, which will contain some initialization settings
-         var definition = new FaceDetectionEffectDefinition();
-
-         // To ensure preview smoothness, do not delay incoming samples
-         definition.SynchronousDetectionEnabled = false;
-
-         // In this scenario, choose detection speed over accuracy
-         definition.DetectionMode = FaceDetectionMode.HighPerformance;
-
-         // Add the effect to the preview stream
-         var _faceDetectionEffect = (FaceDetectionEffect)await this.mediaCapture.AddVideoEffectAsync(definition, MediaStreamType.VideoPreview);
-
-         // Register for face detection events
-         _faceDetectionEffect.FaceDetected += FaceDetectionEffect_FaceDetected;
-
-         // Choose the shortest interval between detection events
-         _faceDetectionEffect.DesiredDetectionInterval = TimeSpan.FromMilliseconds(100);
-
-         // Start detecting faces
-         _faceDetectionEffect.Enabled = true;
-      }
-
-      private async void FaceDetectionEffect_FaceDetected(FaceDetectionEffect sender, FaceDetectedEventArgs args)
-      {
-         // Ask the UI thread to render the face bounding boxes
-         //await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () => HighlightDetectedFaces(args.ResultFrame.DetectedFaces));
-         //var previewFrameSize = new Windows.Foundation.Size(previewFrame.SoftwareBitmap.PixelWidth, previewFrame.SoftwareBitmap.PixelHeight);
-         //var ignored = this.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
-         //{
-         //   //this.SetupVisualization(previewFrameSize, faces);
-         //   this.SetupProgressBar(anger, contempt, disgust, fear, happiness, sadness, surprise, smile);
-         //});
-         var x = args.ResultFrame.ExtendedProperties;
-         var detectedFaces = args.ResultFrame.DetectedFaces;
-         await this.ProcessCurrentVideoFrameAsync(detectedFaces);
       }
 
       /// <summary>
@@ -289,8 +249,21 @@ namespace SmilePhotoKiosk
          return successful;
       }
 
-      private void MediaFrameReader_FrameArrived(MediaFrameReader sender, MediaFrameArrivedEventArgs args)
+      private async void MediaFrameReader_FrameArrived(MediaFrameReader sender, MediaFrameArrivedEventArgs args)
       {
+         try
+         {
+            var videoFrame = sender.TryAcquireLatestFrame()?.VideoMediaFrame?.GetVideoFrame();
+            if (videoFrame != null)
+            {
+               var localDetectedFaces = await this.faceTracker.ProcessNextFrameAsync(videoFrame);
+               await ProcessCurrentVideoFrameAsync(localDetectedFaces);
+            }
+         }
+         catch (Exception ex)
+         {
+            NotifyUser(ex.ToString(), NotifyType.ErrorMessage);
+         }
       }
 
       /// <summary>
@@ -327,7 +300,7 @@ namespace SmilePhotoKiosk
       /// take longer to process.
       /// </remarks>
       /// <param name="timer">Timer object invoking this call</param>
-      private async Task ProcessCurrentVideoFrameAsync(IReadOnlyList<LocalDetectedFace> localFaces)
+      private async Task ProcessCurrentVideoFrameAsync(IList<LocalDetectedFace> localFaces)
       {
          // If a lock is being held it means we're still waiting for processing work on the previous frame to complete.
          // In this situation, don't wait on the semaphore but exit immediately.
@@ -420,7 +393,7 @@ namespace SmilePhotoKiosk
       /// </summary>
       /// <param name="framePixelSize">Width and height (in pixels) of the video capture frame</param>
       /// <param name="foundFaces">List of detected faces; output from FaceTracker</param>
-      private void SetupVisualization(Windows.Foundation.Size framePixelSize, IReadOnlyList<LocalDetectedFace> foundFaces)
+      private void SetupVisualization(Windows.Foundation.Size framePixelSize, IList<LocalDetectedFace> foundFaces)
       {
          this.VisualizationCanvas.Children.Clear();
 
