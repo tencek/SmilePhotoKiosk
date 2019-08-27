@@ -28,6 +28,7 @@ using LocalDetectedFace = Windows.Media.FaceAnalysis.DetectedFace;
 using RemoteDetectedFace = Microsoft.Azure.CognitiveServices.Vision.Face.Models.DetectedFace;
 using Windows.Media.Core;
 using Windows.Media.Capture.Frames;
+using Windows.Foundation;
 
 namespace SmilePhotoKiosk
 {
@@ -43,6 +44,22 @@ namespace SmilePhotoKiosk
    unsafe interface IMemoryBufferByteAccess
    {
       void GetBuffer(out byte* buffer, out uint capacity);
+   }
+
+   public struct RelativeRectangle
+   {
+      public double Left;
+      public double Top;
+      public double Width;
+      public double Height;
+
+      public RelativeRectangle(double left, double top, double width, double height)
+      {
+         Left = left;
+         Top = top;
+         Width = width;
+         Height = height;
+      }
    }
 
    /// <summary>
@@ -251,18 +268,113 @@ namespace SmilePhotoKiosk
 
       private async void MediaFrameReader_FrameArrived(MediaFrameReader sender, MediaFrameArrivedEventArgs args)
       {
+         // If a lock is being held it means we're still waiting for processing work on the previous frame to complete.
+         // In this situation, don't wait on the semaphore but exit immediately.
+         if (!frameProcessingSemaphore.Wait(0))
+         {
+            return;
+         }
          try
          {
-            var videoFrame = sender.TryAcquireLatestFrame()?.VideoMediaFrame?.GetVideoFrame();
-            if (videoFrame != null)
+            using (var mediaFrameReference = sender.TryAcquireLatestFrame())
             {
-               var localDetectedFaces = await this.faceTracker.ProcessNextFrameAsync(videoFrame);
-               await ProcessCurrentVideoFrameAsync(localDetectedFaces);
+               using (var videoFrame = mediaFrameReference?.VideoMediaFrame?.GetVideoFrame())
+               {
+                  if (videoFrame != null)
+                  {
+                     var localFaces = await FindFacesOnFrameLocalAsync(videoFrame);
+                     if (localFaces.Count > 0)
+                     {
+                        var remoteFaces = await FindFacesOnFrameRemoteAsync(videoFrame);
+                        var relativeRectangles = GetFaceRectanglesRelativeToFrame(remoteFaces, videoFrame);
+                        var faceAttributes = remoteFaces.Select(face => face.FaceAttributes).FirstOrDefault();
+                        var ignored = this.Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+                        {
+                           this.UpdateUi(relativeRectangles, faceAttributes);
+                        });
+                     }
+                  }
+               }
             }
          }
          catch (Exception ex)
          {
             NotifyUser(ex.ToString(), NotifyType.ErrorMessage);
+         }
+         finally
+         {
+            frameProcessingSemaphore.Release();
+         }
+      }
+
+      private void UpdateUi(IEnumerable<RelativeRectangle> relativeRectangles, FaceAttributes faceAttributes)
+      {
+         this.DisplayRelativeRectangles(this.VisualizationCanvas, relativeRectangles);
+         this.SetupProgressBar(
+            (faceAttributes?.Emotion?.Anger).GetValueOrDefault(),
+            (faceAttributes?.Emotion?.Contempt).GetValueOrDefault(),
+            (faceAttributes?.Emotion?.Disgust).GetValueOrDefault(),
+            (faceAttributes?.Emotion?.Fear).GetValueOrDefault(),
+            (faceAttributes?.Emotion?.Happiness).GetValueOrDefault(),
+            (faceAttributes?.Emotion?.Sadness).GetValueOrDefault(),
+            (faceAttributes?.Emotion?.Surprise).GetValueOrDefault(),
+            (faceAttributes?.Smile).GetValueOrDefault());
+      }
+
+      private void DisplayRelativeRectangles(Canvas canvas, IEnumerable<RelativeRectangle> relativeRectangles)
+      {
+         canvas.Children.Clear();
+
+         var boxes = from rectangle in relativeRectangles
+                     select new Rectangle()
+                     {
+                        Width = (uint)(canvas.Width * rectangle.Width),
+                        Height = (uint)(canvas.Height * rectangle.Height),
+                        Fill = this.fillBrush,
+                        Stroke = this.lineBrush,
+                        StrokeThickness = this.lineThickness,
+                     };
+
+         foreach (var box in boxes)
+         {
+            this.VisualizationCanvas.Children.Add(box);
+         }
+      }
+
+
+      private RelativeRectangle GetFaceRectangleRelativeToFrame(RemoteDetectedFace face, VideoFrame videoFrame)
+      {
+         double left = (double)face.FaceRectangle.Left / (double)videoFrame.SoftwareBitmap.PixelWidth;
+         double top = (double)face.FaceRectangle.Top / (double)videoFrame.SoftwareBitmap.PixelHeight;
+         double width = (double)face.FaceRectangle.Width / (double)videoFrame.SoftwareBitmap.PixelWidth;
+         double height = (double)face.FaceRectangle.Height / (double)videoFrame.SoftwareBitmap.PixelHeight;
+         return new RelativeRectangle( left: left, top: top, width: width, height: height );
+      }
+
+      private IList<RelativeRectangle> GetFaceRectanglesRelativeToFrame(IEnumerable<RemoteDetectedFace> faces, VideoFrame videoFrame)
+      {
+         return
+            (from face in faces
+             select GetFaceRectangleRelativeToFrame(face, videoFrame)).ToList();
+      }
+
+      private async Task<IList<LocalDetectedFace>> FindFacesOnFrameLocalAsync(VideoFrame videoFrame)
+      {
+         return await this.faceTracker.ProcessNextFrameAsync(videoFrame);
+      }
+
+      private async Task<IList<RemoteDetectedFace>> FindFacesOnFrameRemoteAsync(VideoFrame videoFrame)
+      {
+         IList<FaceAttributeType> faceAttributes =
+             new FaceAttributeType[]
+             {
+                         FaceAttributeType.Smile, FaceAttributeType.Emotion
+             };
+         using (var captureStream = new InMemoryRandomAccessStream())
+         {
+            await mediaCapture.CapturePhotoToStreamAsync(ImageEncodingProperties.CreateJpeg(), captureStream);
+            captureStream.Seek(0);
+            return await faceClient.Face.DetectWithStreamAsync(captureStream.AsStreamForRead(), true, true, faceAttributes);
          }
       }
 
@@ -291,90 +403,46 @@ namespace SmilePhotoKiosk
          this.mediaCapture = null;
       }
 
-      /// <summary>
-      /// This method is invoked by a ThreadPoolTimer to execute the FaceTracker and Visualization logic at approximately 15 frames per second.
-      /// </summary>
-      /// <remarks>
-      /// Keep in mind this method is called from a Timer and not synchronized with the camera stream. Also, the processing time of FaceTracker
-      /// will vary depending on the size of each frame and the number of faces being tracked. That is, a large image with several tracked faces may
-      /// take longer to process.
-      /// </remarks>
-      /// <param name="timer">Timer object invoking this call</param>
-      private async Task ProcessCurrentVideoFrameAsync(IList<LocalDetectedFace> localFaces)
-      {
-         // If a lock is being held it means we're still waiting for processing work on the previous frame to complete.
-         // In this situation, don't wait on the semaphore but exit immediately.
-         if (!frameProcessingSemaphore.Wait(0))
-         {
-            return;
-         }
+      //private async Task ProcessCurrentVideoFrameAsync(IList<RemoteDetectedFace> remoteFaces)
+      //{
+      //   try
+      //   {
+      //      if (remoteFaces.Count > 0)
+      //      {
+      //         var remoteFace = remoteFaces[0];
 
-         try
-         {
-            // Create a VideoFrame object specifying the pixel format we want our capture image to be (NV12 bitmap in this case).
-            // GetPreviewFrame will convert the native webcam frame into this format.
-            const BitmapPixelFormat InputPixelFormat = BitmapPixelFormat.Rgba8;
-            using (VideoFrame previewFrame = new VideoFrame(InputPixelFormat, (int)this.videoProperties.Width, (int)this.videoProperties.Height))
-            {
-               await this.mediaCapture.GetPreviewFrameAsync(previewFrame);
+      //         // Create our visualization using the frame dimensions and face results but run it on the UI thread.
+      //         var videoFrameSize = new Windows.Foundation.Size(videoFrame.SoftwareBitmap.PixelWidth, videoFrame.SoftwareBitmap.PixelHeight);
+      //         var ignored = this.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+      //         {
+      //            this.SetupVisualization(videoFrameSize, remoteFaces);
+      //            this.SetupProgressBar(
+      //               remoteFace.FaceAttributes.Emotion.Anger,
+      //               remoteFace.FaceAttributes.Emotion.Contempt,
+      //               remoteFace.FaceAttributes.Emotion.Disgust,
+      //               remoteFace.FaceAttributes.Emotion.Fear,
+      //               remoteFace.FaceAttributes.Emotion.Happiness,
+      //               remoteFace.FaceAttributes.Emotion.Sadness,
+      //               remoteFace.FaceAttributes.Emotion.Surprise,
+      //               remoteFace.FaceAttributes.Smile.Value);
+      //         });
 
-               if (localFaces.Count > 0)
-               {
-                  IList<FaceAttributeType> faceAttributes =
-                      new FaceAttributeType[]
-                      {
-                         FaceAttributeType.Smile, FaceAttributeType.Emotion
-                      };
-                  using (var captureStream = new InMemoryRandomAccessStream())
-                  {
-                     await mediaCapture.CapturePhotoToStreamAsync(ImageEncodingProperties.CreateJpeg(), captureStream);
-                     captureStream.Seek(0);
-                     IList<RemoteDetectedFace> remoteFaces =
-                             await faceClient.Face.DetectWithStreamAsync(captureStream.AsStreamForRead(), true, true, faceAttributes);
-                     if (remoteFaces.Count > 0)
-                     {
-                        var remoteFace = remoteFaces[0];
-
-                        // Create our visualization using the frame dimensions and face results but run it on the UI thread.
-                        var previewFrameSize = new Windows.Foundation.Size(previewFrame.SoftwareBitmap.PixelWidth, previewFrame.SoftwareBitmap.PixelHeight);
-                        var ignored = this.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
-                        {
-                           this.SetupVisualization(previewFrameSize, localFaces);
-                           this.SetupProgressBar(
-                              remoteFace.FaceAttributes.Emotion.Anger,
-                              remoteFace.FaceAttributes.Emotion.Contempt,
-                              remoteFace.FaceAttributes.Emotion.Disgust,
-                              remoteFace.FaceAttributes.Emotion.Fear,
-                              remoteFace.FaceAttributes.Emotion.Happiness,
-                              remoteFace.FaceAttributes.Emotion.Sadness,
-                              remoteFace.FaceAttributes.Emotion.Surprise,
-                              remoteFace.FaceAttributes.Smile.Value);
-                        });
-
-                        if (remoteFace.FaceAttributes.Smile.Value > smileThreshold)
-                        {
-                           var file = await captureFolder.CreateFileAsync("SmileFace.jpg", CreationCollisionOption.GenerateUniqueName);
-                           var croppedBitmap = CropImageByRect(previewFrame.SoftwareBitmap, remoteFace.FaceRectangle);
-                           await SaveSoftwareBitmapAsync(croppedBitmap, file);
-                        }
-                     }
-                  }
-               }
-            }
-         }
-         catch (Exception ex)
-         {
-            var ignored = this.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
-            {
-               NotifyUser(ex.ToString(), NotifyType.ErrorMessage);
-            });
-         }
-         finally
-         {
-            frameProcessingSemaphore.Release();
-         }
-
-      }
+      //         if (remoteFace.FaceAttributes.Smile.Value > smileThreshold)
+      //         {
+      //            var file = await captureFolder.CreateFileAsync("SmileFace.jpg", CreationCollisionOption.GenerateUniqueName);
+      //            var croppedBitmap = CropImageByRect(videoFrame.SoftwareBitmap, remoteFace.FaceRectangle);
+      //            await SaveSoftwareBitmapAsync(croppedBitmap, file);
+      //         }
+      //      }
+      //   }
+      //   catch (Exception ex)
+      //   {
+      //      var ignored = this.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+      //      {
+      //         NotifyUser(ex.ToString(), NotifyType.ErrorMessage);
+      //      });
+      //   }
+      //}
 
       private void SetupProgressBar(double anger, double contempt, double disgust, double fear, double happiness, double sadness, double surprise, double smile)
       {
@@ -386,41 +454,6 @@ namespace SmilePhotoKiosk
          progress_sadness.Value = sadness * progress_sadness.Maximum;
          progress_surprise.Value = surprise * progress_surprise.Maximum;
          progress_smile.Value = smile * progress_smile.Maximum;
-      }
-
-      /// <summary>
-      /// Takes the webcam image and FaceTracker results and assembles the visualization onto the Canvas.
-      /// </summary>
-      /// <param name="framePixelSize">Width and height (in pixels) of the video capture frame</param>
-      /// <param name="foundFaces">List of detected faces; output from FaceTracker</param>
-      private void SetupVisualization(Windows.Foundation.Size framePixelSize, IList<LocalDetectedFace> foundFaces)
-      {
-         this.VisualizationCanvas.Children.Clear();
-
-         double actualWidth = this.VisualizationCanvas.ActualWidth;
-         double actualHeight = this.VisualizationCanvas.ActualHeight;
-
-         if (foundFaces != null && actualWidth != 0 && actualHeight != 0)
-         {
-            double widthScale = framePixelSize.Width / actualWidth;
-            double heightScale = framePixelSize.Height / actualHeight;
-
-            var boxes = from face in foundFaces
-                        select new Rectangle()
-                        {
-                           Width = (uint)(face.FaceBox.Width / widthScale),
-                           Height = (uint)(face.FaceBox.Height / heightScale),
-                           Fill = this.fillBrush,
-                           Stroke = this.lineBrush,
-                           StrokeThickness = this.lineThickness,
-                           Margin = new Thickness((uint)(face.FaceBox.X / widthScale), (uint)(face.FaceBox.Y / heightScale), 0, 0)
-                        };
-
-            foreach (var box in boxes)
-            {
-               this.VisualizationCanvas.Children.Add(box);
-            }
-         }
       }
 
       /// <summary>
