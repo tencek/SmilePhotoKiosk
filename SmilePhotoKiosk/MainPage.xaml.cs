@@ -328,8 +328,12 @@ namespace SmilePhotoKiosk
          var boxes = from rectangle in relativeRectangles
                      select new Rectangle()
                      {
-                        Width = (uint)(canvas.Width * rectangle.Width),
-                        Height = (uint)(canvas.Height * rectangle.Height),
+                        Width = (uint)(canvas.ActualWidth * rectangle.Width),
+                        Height = (uint)(canvas.ActualHeight * rectangle.Height),
+                        Margin = new Thickness(
+                           (uint)(canvas.ActualWidth * rectangle.Left),
+                           (uint)(canvas.ActualHeight * rectangle.Top),
+                           0, 0),
                         Fill = this.fillBrush,
                         Stroke = this.lineBrush,
                         StrokeThickness = this.lineThickness,
