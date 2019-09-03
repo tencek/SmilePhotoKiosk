@@ -108,7 +108,7 @@ namespace SmilePhotoKiosk
       // Folder in which the captures will be stored (initialized in InitializeCameraAsync)
       private StorageFolder captureFolder = null;
 
-      private readonly double smileThreshold = 0.95;
+      private double smileThreshold = 0.0;
 
       /// <summary>
       /// Initializes a new instance of the <see cref="TrackFacesInWebcam"/> class.
@@ -289,24 +289,36 @@ namespace SmilePhotoKiosk
                         this.DisplayRelativeRectangles(this.VisualizationCanvas, relativeRectangles);
                      });
 
-                     FaceAttributes faceAttributes = null;
                      if (localFaces.Count > 0)
                      {
                         var remoteFaces = await FindFacesOnFrameRemoteAsync(videoFrame);
-                        faceAttributes = remoteFaces.Select(face => face.FaceAttributes).FirstOrDefault();
+                        if (remoteFaces.Count > 0)
+                        {
+                           var face = remoteFaces.First();
+
+                           var setupProgressBarAction = this.Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+                           {
+                              this.SetupProgressBar(
+                                 face.FaceAttributes.Emotion.Anger,
+                                 face.FaceAttributes.Emotion.Contempt,
+                                 face.FaceAttributes.Emotion.Disgust,
+                                 face.FaceAttributes.Emotion.Fear,
+                                 face.FaceAttributes.Emotion.Happiness,
+                                 face.FaceAttributes.Emotion.Sadness,
+                                 face.FaceAttributes.Emotion.Surprise,
+                                 face.FaceAttributes.Smile.Value);
+                           });
+
+                           if (face.FaceAttributes.Smile >= smileThreshold)
+                           {
+                              var file = await captureFolder.CreateFileAsync("SmileFace.jpg", CreationCollisionOption.GenerateUniqueName);
+                              var bgraBitmap = SoftwareBitmap.Convert(videoFrame.SoftwareBitmap, BitmapPixelFormat.Bgra8);
+                              var croppedBitmap = CropImageByRect(bgraBitmap, face.FaceRectangle);
+                              await SaveSoftwareBitmapAsync(croppedBitmap, file);
+                              smileThreshold = face.FaceAttributes.Smile.Value;
+                           }
+                        }
                      }
-                     var setupProgressBarAction = this.Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
-                     {
-                        this.SetupProgressBar(
-                           (faceAttributes?.Emotion?.Anger).GetValueOrDefault(),
-                           (faceAttributes?.Emotion?.Contempt).GetValueOrDefault(),
-                           (faceAttributes?.Emotion?.Disgust).GetValueOrDefault(),
-                           (faceAttributes?.Emotion?.Fear).GetValueOrDefault(),
-                           (faceAttributes?.Emotion?.Happiness).GetValueOrDefault(),
-                           (faceAttributes?.Emotion?.Sadness).GetValueOrDefault(),
-                           (faceAttributes?.Emotion?.Surprise).GetValueOrDefault(),
-                           (faceAttributes?.Smile).GetValueOrDefault());
-                     });
                   }
                }
             }
@@ -541,10 +553,10 @@ namespace SmilePhotoKiosk
          {
             var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.JpegEncoderId, outputStream);
 
-            var propertySet = new Windows.Graphics.Imaging.BitmapPropertySet();
-            var orientationValue = new Windows.Graphics.Imaging.BitmapTypedValue(
+            var propertySet = new BitmapPropertySet();
+            var orientationValue = new BitmapTypedValue(
                 1, // Defined as EXIF orientation = "normal"
-                Windows.Foundation.PropertyType.UInt16
+                PropertyType.UInt16
                 );
             propertySet.Add("System.Photo.Orientation", orientationValue);
 
