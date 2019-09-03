@@ -1,6 +1,6 @@
 ﻿namespace PictureFolderWatcherService
 {
-   partial class Service1
+   partial class PictureFolderWatcherService
    {
       /// <summary> 
       /// Required designer variable.

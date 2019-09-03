@@ -10,9 +10,9 @@ using System.Threading.Tasks;
 
 namespace PictureFolderWatcherService
 {
-   public partial class Service1 : ServiceBase
+   public partial class PictureFolderWatcherService : ServiceBase
    {
-      public Service1()
+      public PictureFolderWatcherService()
       {
          InitializeComponent();
       }
