@@ -29,6 +29,7 @@ using RemoteDetectedFace = Microsoft.Azure.CognitiveServices.Vision.Face.Models.
 using Windows.Media.Core;
 using Windows.Media.Capture.Frames;
 using Windows.Foundation;
+using System.Diagnostics;
 
 namespace SmilePhotoKiosk
 {
@@ -315,6 +316,8 @@ namespace SmilePhotoKiosk
                               var bgraBitmap = SoftwareBitmap.Convert(videoFrame.SoftwareBitmap, BitmapPixelFormat.Bgra8);
                               var croppedBitmap = CropImageByRect(bgraBitmap, face.FaceRectangle);
                               await SaveSoftwareBitmapAsync(croppedBitmap, file);
+                              var smilePerCent = Math.Round(face.FaceAttributes.Smile.Value * 100.0);
+                              await PrintPicture(file.Name, $"{smilePerCent}% Smile:");
                               smileThreshold = face.FaceAttributes.Smile.Value;
                            }
                         }
@@ -566,6 +569,34 @@ namespace SmilePhotoKiosk
             encoder.SetSoftwareBitmap(bitmap);
             await encoder.FlushAsync();
          }
+      }
+
+      private static async Task PrintPicture(string filePath, string label)
+      {
+
+      }
+
+      private static Task<int> RunProcessAsync()
+      {
+         var tcs = new TaskCompletionSource<int>();
+
+         var process = new Process
+         {
+            StartInfo = {
+               FileName = "",
+               Arguments = "" },
+            EnableRaisingEvents = true
+         };
+
+         process.Exited += (_sender, _args) =>
+         {
+            tcs.SetResult(process.ExitCode);
+            process.Dispose();
+         };
+
+         process.Start();
+
+         return tcs.Task;
       }
 
       private unsafe SoftwareBitmap CropImageByRect(SoftwareBitmap inputBitmap, FaceRectangle rect)
