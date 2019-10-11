@@ -1,4 +1,6 @@
-﻿namespace PictureFolderWatcherService
+﻿using System.IO;
+
+namespace PictureFolderWatcherService
 {
    partial class PictureFolderWatcherService
    {
@@ -28,10 +30,34 @@
       /// </summary>
       private void InitializeComponent()
       {
-         components = new System.ComponentModel.Container();
-         this.ServiceName = "Service1";
+         this.eventLog = new System.Diagnostics.EventLog();
+         this.pictureFolderWatcher = new System.IO.FileSystemWatcher();
+         ((System.ComponentModel.ISupportInitialize)(this.eventLog)).BeginInit();
+         ((System.ComponentModel.ISupportInitialize)(this.pictureFolderWatcher)).BeginInit();
+         // 
+         // pictureFolderWatcher
+         // 
+         this.pictureFolderWatcher.EnableRaisingEvents = true;
+         this.pictureFolderWatcher.Filter = "*.jpg";
+         this.pictureFolderWatcher.NotifyFilter = NotifyFilters.LastAccess
+                                 | NotifyFilters.LastWrite
+                                 | NotifyFilters.FileName
+                                 | NotifyFilters.DirectoryName;
+
+         this.pictureFolderWatcher.Path = "C:\\Users\\Manžel\\Pictures";
+
+         // 
+         // PictureFolderWatcherService
+         // 
+         this.ServiceName = "PictureFolderWatcherService";
+         ((System.ComponentModel.ISupportInitialize)(this.eventLog)).EndInit();
+         ((System.ComponentModel.ISupportInitialize)(this.pictureFolderWatcher)).EndInit();
+
       }
 
       #endregion
+
+      private System.Diagnostics.EventLog eventLog;
+      private System.IO.FileSystemWatcher pictureFolderWatcher;
    }
 }
