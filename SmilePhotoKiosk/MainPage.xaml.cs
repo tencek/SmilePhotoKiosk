@@ -310,30 +310,99 @@ namespace SmilePhotoKiosk
                                  face.FaceAttributes.Smile.Value);
                            });
 
-                           if (face.FaceAttributes.Emotion.Surprise >= 0.85)
+
+                           if (face.FaceAttributes.Emotion.Sadness >= 0.85)
+                           {
+                              if (lastDetectedEmotion != "Sadness")
+                              {
+                                 var percent = (int)Math.Round(face.FaceAttributes.Emotion.Sadness * 100.0);
+                                 var fileName = $"{percent}% smutek!.jpg";
+                                 var file = await captureFolder.CreateFileAsync(fileName, CreationCollisionOption.GenerateUniqueName);
+                                 var bgraBitmap = SoftwareBitmap.Convert(videoFrame.SoftwareBitmap, BitmapPixelFormat.Bgra8);
+                                 var croppedBitmap = CropImageByRect(bgraBitmap, face.FaceRectangle);
+                                 await SaveSoftwareBitmapAsync(croppedBitmap, file);
+                              }
+                              lastDetectedEmotion = "Sadness";
+                           }
+                           else 
+                           //if (face.FaceAttributes.Emotion.Happiness >= 0.85)
+                           //{
+                           //   if (lastDetectedEmotion != "Happiness")
+                           //   {
+                           //      var percent = (int)Math.Round(face.FaceAttributes.Emotion.Happiness * 100.0);
+                           //      var fileName = $"{percent}% stesti!.jpg";
+                           //      var file = await captureFolder.CreateFileAsync(fileName, CreationCollisionOption.GenerateUniqueName);
+                           //      var bgraBitmap = SoftwareBitmap.Convert(videoFrame.SoftwareBitmap, BitmapPixelFormat.Bgra8);
+                           //      var croppedBitmap = CropImageByRect(bgraBitmap, face.FaceRectangle);
+                           //      await SaveSoftwareBitmapAsync(croppedBitmap, file);
+                           //   }
+                           //   lastDetectedEmotion = "Happiness";
+                           //}
+                           //else 
+                           if (face.FaceAttributes.Emotion.Fear >= 0.85)
+                           {
+                              if (lastDetectedEmotion != "Fear")
+                              {
+                                 var percent = (int)Math.Round(face.FaceAttributes.Emotion.Fear * 100.0);
+                                 var fileName = $"{percent}% strach!.jpg";
+                                 var file = await captureFolder.CreateFileAsync(fileName, CreationCollisionOption.GenerateUniqueName);
+                                 var bgraBitmap = SoftwareBitmap.Convert(videoFrame.SoftwareBitmap, BitmapPixelFormat.Bgra8);
+                                 var croppedBitmap = CropImageByRect(bgraBitmap, face.FaceRectangle);
+                                 await SaveSoftwareBitmapAsync(croppedBitmap, file);
+                              }
+                              lastDetectedEmotion = "Fear";
+                           }
+                           else if (face.FaceAttributes.Emotion.Disgust >= 0.85)
+                           {
+                              if (lastDetectedEmotion != "Disgust")
+                              {
+                                 var percent = (int)Math.Round(face.FaceAttributes.Emotion.Disgust * 100.0);
+                                 var fileName = $"{percent}% znechuceni!.jpg";
+                                 var file = await captureFolder.CreateFileAsync(fileName, CreationCollisionOption.GenerateUniqueName);
+                                 var bgraBitmap = SoftwareBitmap.Convert(videoFrame.SoftwareBitmap, BitmapPixelFormat.Bgra8);
+                                 var croppedBitmap = CropImageByRect(bgraBitmap, face.FaceRectangle);
+                                 await SaveSoftwareBitmapAsync(croppedBitmap, file);
+                              }
+                              lastDetectedEmotion = "Disgust";
+                           }
+                           else if(face.FaceAttributes.Emotion.Contempt >= 0.85)
+                           {
+                              if (lastDetectedEmotion != "Contempt")
+                              {
+                                 var percent = (int)Math.Round(face.FaceAttributes.Emotion.Contempt * 100.0);
+                                 var fileName = $"{percent}% pohrdani!.jpg";
+                                 var file = await captureFolder.CreateFileAsync(fileName, CreationCollisionOption.GenerateUniqueName);
+                                 var bgraBitmap = SoftwareBitmap.Convert(videoFrame.SoftwareBitmap, BitmapPixelFormat.Bgra8);
+                                 var croppedBitmap = CropImageByRect(bgraBitmap, face.FaceRectangle);
+                                 await SaveSoftwareBitmapAsync(croppedBitmap, file);
+                              }
+                              lastDetectedEmotion = "Contempt";
+                           }
+                           else if(face.FaceAttributes.Emotion.Anger >= 0.85)
+                           {
+                              if (lastDetectedEmotion != "Anger")
+                              {
+                                 var percent = (int)Math.Round(face.FaceAttributes.Emotion.Anger * 100.0);
+                                 var fileName = $"{percent}% vztek!.jpg";
+                                 var file = await captureFolder.CreateFileAsync(fileName, CreationCollisionOption.GenerateUniqueName);
+                                 var bgraBitmap = SoftwareBitmap.Convert(videoFrame.SoftwareBitmap, BitmapPixelFormat.Bgra8);
+                                 var croppedBitmap = CropImageByRect(bgraBitmap, face.FaceRectangle);
+                                 await SaveSoftwareBitmapAsync(croppedBitmap, file);
+                              }
+                              lastDetectedEmotion = "Anger";
+                           }
+                           else if (face.FaceAttributes.Emotion.Surprise >= 0.85)
                            {
                               if (lastDetectedEmotion != "Surprise")
                               {
                                  var percent = (int) Math.Round(face.FaceAttributes.Emotion.Surprise * 100.0);
-                                 var fileName = $"{percent}% surprise!.jpg";
+                                 var fileName = $"{percent}% prekvapeni!.jpg";
                                  var file = await captureFolder.CreateFileAsync(fileName, CreationCollisionOption.GenerateUniqueName);
                                  var bgraBitmap = SoftwareBitmap.Convert(videoFrame.SoftwareBitmap, BitmapPixelFormat.Bgra8);
                                  var croppedBitmap = CropImageByRect(bgraBitmap, face.FaceRectangle);
                                  await SaveSoftwareBitmapAsync(croppedBitmap, file);
                               }
                               lastDetectedEmotion = "Surprise";
-                           }else if (face.FaceAttributes.Smile >= 1.00)
-                           {
-                              if (lastDetectedEmotion != "Smile")
-                              {
-                                 var percent = (int)Math.Round(face.FaceAttributes.Smile.Value * 100.0);
-                                 var fileName = $"{percent}% smile!.jpg";
-                                 var file = await captureFolder.CreateFileAsync(fileName, CreationCollisionOption.GenerateUniqueName);
-                                 var bgraBitmap = SoftwareBitmap.Convert(videoFrame.SoftwareBitmap, BitmapPixelFormat.Bgra8);
-                                 var croppedBitmap = CropImageByRect(bgraBitmap, face.FaceRectangle);
-                                 await SaveSoftwareBitmapAsync(croppedBitmap, file);
-                              }
-                              lastDetectedEmotion = "Smile";
                            }
                            else
                            {
