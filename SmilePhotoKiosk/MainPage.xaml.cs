@@ -314,7 +314,9 @@ namespace SmilePhotoKiosk
                            {
                               if (lastDetectedEmotion != "Surprise")
                               {
-                                 var file = await captureFolder.CreateFileAsync("SurpriseFace.jpg", CreationCollisionOption.GenerateUniqueName);
+                                 var percent = (int) Math.Round(face.FaceAttributes.Emotion.Surprise * 100.0);
+                                 var fileName = $"{percent}% surprise!.jpg";
+                                 var file = await captureFolder.CreateFileAsync(fileName, CreationCollisionOption.GenerateUniqueName);
                                  var bgraBitmap = SoftwareBitmap.Convert(videoFrame.SoftwareBitmap, BitmapPixelFormat.Bgra8);
                                  var croppedBitmap = CropImageByRect(bgraBitmap, face.FaceRectangle);
                                  await SaveSoftwareBitmapAsync(croppedBitmap, file);
@@ -324,7 +326,9 @@ namespace SmilePhotoKiosk
                            {
                               if (lastDetectedEmotion != "Smile")
                               {
-                                 var file = await captureFolder.CreateFileAsync("SmileFace.jpg", CreationCollisionOption.GenerateUniqueName);
+                                 var percent = (int)Math.Round(face.FaceAttributes.Smile.Value * 100.0);
+                                 var fileName = $"{percent}% smile!.jpg";
+                                 var file = await captureFolder.CreateFileAsync(fileName, CreationCollisionOption.GenerateUniqueName);
                                  var bgraBitmap = SoftwareBitmap.Convert(videoFrame.SoftwareBitmap, BitmapPixelFormat.Bgra8);
                                  var croppedBitmap = CropImageByRect(bgraBitmap, face.FaceRectangle);
                                  await SaveSoftwareBitmapAsync(croppedBitmap, file);
