@@ -23,7 +23,7 @@ let run () =
    
    Console.WriteLine(sprintf "Press Ctrl+C to stop watching for new %s files in the %s folder." pictureFolderWatcher.Filter pictureFolderWatcher.Path)
    
-   while true do
+   while Console.ReadKey() <> ConsoleKeyInfo() do
       ()
 
 
