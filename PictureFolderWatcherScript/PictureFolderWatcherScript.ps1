@@ -9,7 +9,7 @@ $onNewPictureCreated =
 {
     $newPicturePath = $event.SourceEventArgs.FullPath
     Write-Host "New picture $newPicturePath created!"
-    C:\Users\Manžel\source\repos\Pos4NetImagePrinter\src\Pos4NetImagePrinter\bin\Debug\net472\Pos4NetImagePrinter.exe /width Full /FileNameAsLabel /printer "TM-T88VMU" /path $newPicturePath
+    C:\Users\Manžel\source\repos\Pos4NetImagePrinter\src\Pos4NetImagePrinter\bin\Debug\net472\Pos4NetImagePrinter.exe /width Full /FileNameAsLabel /printer "TM-T88VMU" /path "$newPicturePath"
 }
 
 $pictureFolderWatcher = New-Object System.IO.FileSystemWatcher
