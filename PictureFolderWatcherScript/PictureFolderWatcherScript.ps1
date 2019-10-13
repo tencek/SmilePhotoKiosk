@@ -1,5 +1,6 @@
 ﻿#
 # Script.ps1
+# Based on https://mcpmag.com/articles/2019/05/01/monitor-windows-folder-for-new-files.aspx
 #
 
 $pictureFolderPath = [environment]::GetFolderPath("mypictures")
@@ -19,10 +20,6 @@ $pictureFolderWatcher.IncludeSubdirectories = $false
 Write-Host "Watching for new" $pictureFolderWatcher.Filter "files in the" $pictureFolderWatcher.Path "directory"
 $pictureFolderWatcher.EnableRaisingEvents = $true
 
-Register-ObjectEvent $pictureFolderWatcher 'Created' -Action $onNewPictureCreated
-
-#Start-Sleep -Seconds 30
-
-#Write-Host "End of watching for new" $pictureFolderWatcher.Filter "files in the" $pictureFolderWatcher.Path "directory"
-#$pictureFolderWatcher.Dispose();
+$subscription = Register-ObjectEvent $pictureFolderWatcher 'Created' -Action $onNewPictureCreated
+$subscription
 
