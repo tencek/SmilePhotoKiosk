@@ -109,7 +109,7 @@ namespace SmilePhotoKiosk
       // Folder in which the captures will be stored (initialized in InitializeCameraAsync)
       private StorageFolder captureFolder = null;
 
-      private double smileThreshold = 0.0;
+      private string lastDetectedEmotion = "None";
 
       /// <summary>
       /// Initializes a new instance of the <see cref="TrackFacesInWebcam"/> class.
@@ -310,15 +310,30 @@ namespace SmilePhotoKiosk
                                  face.FaceAttributes.Smile.Value);
                            });
 
-                           if (face.FaceAttributes.Smile >= smileThreshold)
+                           if (face.FaceAttributes.Emotion.Surprise >= 0.85)
                            {
-                              var file = await captureFolder.CreateFileAsync("SmileFace.jpg", CreationCollisionOption.GenerateUniqueName);
-                              var bgraBitmap = SoftwareBitmap.Convert(videoFrame.SoftwareBitmap, BitmapPixelFormat.Bgra8);
-                              var croppedBitmap = CropImageByRect(bgraBitmap, face.FaceRectangle);
-                              await SaveSoftwareBitmapAsync(croppedBitmap, file);
-                              var smilePerCent = Math.Round(face.FaceAttributes.Smile.Value * 100.0);
-                              await PrintPicture(file.Name, $"{smilePerCent}% Smile:");
-                              smileThreshold = face.FaceAttributes.Smile.Value;
+                              if (lastDetectedEmotion != "Surprise")
+                              {
+                                 var file = await captureFolder.CreateFileAsync("SurpriseFace.jpg", CreationCollisionOption.GenerateUniqueName);
+                                 var bgraBitmap = SoftwareBitmap.Convert(videoFrame.SoftwareBitmap, BitmapPixelFormat.Bgra8);
+                                 var croppedBitmap = CropImageByRect(bgraBitmap, face.FaceRectangle);
+                                 await SaveSoftwareBitmapAsync(croppedBitmap, file);
+                              }
+                              lastDetectedEmotion = "Surprise";
+                           }else if (face.FaceAttributes.Smile >= 1.00)
+                           {
+                              if (lastDetectedEmotion != "Smile")
+                              {
+                                 var file = await captureFolder.CreateFileAsync("SmileFace.jpg", CreationCollisionOption.GenerateUniqueName);
+                                 var bgraBitmap = SoftwareBitmap.Convert(videoFrame.SoftwareBitmap, BitmapPixelFormat.Bgra8);
+                                 var croppedBitmap = CropImageByRect(bgraBitmap, face.FaceRectangle);
+                                 await SaveSoftwareBitmapAsync(croppedBitmap, file);
+                              }
+                              lastDetectedEmotion = "Smile";
+                           }
+                           else
+                           {
+                              lastDetectedEmotion = "None";
                            }
                         }
                      }
@@ -569,11 +584,6 @@ namespace SmilePhotoKiosk
             encoder.SetSoftwareBitmap(bitmap);
             await encoder.FlushAsync();
          }
-      }
-
-      private static async Task PrintPicture(string filePath, string label)
-      {
-
       }
 
       private static Task<int> RunProcessAsync()
