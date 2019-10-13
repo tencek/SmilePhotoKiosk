@@ -1,12 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Diagnostics;
-using System.Linq;
 using System.ServiceProcess;
-using System.Text;
-using System.Threading.Tasks;
 using System.IO;
 
 namespace PictureFolderWatcherService
@@ -20,14 +13,16 @@ namespace PictureFolderWatcherService
 
       protected override void OnStart(string[] args)
       {
-         eventLog.WriteEntry("In OnStart.");
+         base.OnStart(args);
+         eventLog.WriteEntry($"Watching for new {this.pictureFolderWatcher.Filter} files in the {this.pictureFolderWatcher.Path} folder.");
          this.pictureFolderWatcher.Created += OnPictureFileCreated;
       }
 
       protected override void OnStop()
       {
          this.pictureFolderWatcher.Created -= OnPictureFileCreated;
-         eventLog.WriteEntry("In OnStop.");
+         eventLog.WriteEntry($"End of watching for new {this.pictureFolderWatcher.Filter} files in the {this.pictureFolderWatcher.Path} folder.");
+         base.OnStop();
       }
 
       protected void OnPictureFileCreated(object source, FileSystemEventArgs e)
