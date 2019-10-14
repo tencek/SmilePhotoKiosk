@@ -1,5 +1,4 @@
 ﻿#
-# Script.ps1
 # Based on https://mcpmag.com/articles/2019/05/01/monitor-windows-folder-for-new-files.aspx
 #
 
