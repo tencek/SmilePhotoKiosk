@@ -14,6 +14,7 @@ Set-Alias -Name Pos4NetImagePrinter -Value $Pos4NetImagePrinter
 # Unregister any events registered in this session. Comment out if it is not what you want.
 Get-EventSubscriber | Unregister-Event
 
+# handler
 $onNewPictureCreated =
 {
     $newPicturePath = $event.SourceEventArgs.FullPath
@@ -21,14 +22,15 @@ $onNewPictureCreated =
     Pos4NetImagePrinter /width Full /FileNameAsLabel /Conversion bmp32 /printer $PosPrinter /path "$newPicturePath"
 }
 
+# Create file system watcher
 $pictureFolderWatcher = New-Object System.IO.FileSystemWatcher
 $pictureFolderWatcher.Filter = "*.*"
 $pictureFolderWatcher.Path = $pictureFolderPath
 $pictureFolderWatcher.IncludeSubdirectories = $true
-
-Write-Host "Watching for new" $pictureFolderWatcher.Filter "files in the" $pictureFolderWatcher.Path "directory"
 $pictureFolderWatcher.EnableRaisingEvents = $true
+Write-Host "Watching for new" $pictureFolderWatcher.Filter "files in the" $pictureFolderWatcher.Path "directory"
 
+# Subscribe for new files
 $subscription = Register-ObjectEvent $pictureFolderWatcher 'Created' -Action $onNewPictureCreated
 $subscription
 
