@@ -291,6 +291,8 @@ namespace SmilePhotoKiosk
                      if (localFaces.Count > 0)
                      {
                         var remoteFaces = await FindFacesOnFrameRemoteAsync(videoFrame);
+                        this.DisplayFacesAttributes(this.VisualizationCanvas, remoteFaces);
+                        
                         if (remoteFaces.Count > 0)
                         {
                            var face = remoteFaces.First();
@@ -444,6 +446,10 @@ namespace SmilePhotoKiosk
          {
             this.VisualizationCanvas.Children.Add(box);
          }
+      }
+
+      private void DisplayFacesAttributes(Canvas canvas, IEnumerable<RemoteDetectedFace> remoteDetectedFaces)
+      {
       }
 
 
