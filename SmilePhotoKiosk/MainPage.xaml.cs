@@ -289,44 +289,13 @@ namespace SmilePhotoKiosk
                   {
                      currentFrameSize = new Size(videoFrame.SoftwareBitmap.PixelWidth, videoFrame.SoftwareBitmap.PixelHeight);
                      localFaces = await FindFacesOnFrameLocalAsync(videoFrame);
-                     //var relativeRectangles = GetFaceRectanglesRelativeToFrame(localFaces, videoFrame);
-                     //var displayRectanglesAction = this.Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
-                     //{
-                     //   this.DisplayRelativeRectangles(this.VisualizationCanvas, relativeRectangles);
-                     //});
-
-                     var updateVisualisationAction = this.Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
-                     {
-                        this.UpdateVisualisation();
-                     });
-
 
                      if (localFaces.Count > 0)
                      {
                         remoteFaces = await FindFacesOnFrameRemoteAsync(videoFrame);
-                        var updateVisualisationAgainAction = this.Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
-                        {
-                           this.UpdateVisualisation();
-                        });
-
                         if (remoteFaces.Count > 0)
                         {
                            var face = remoteFaces.First();
-
-                           var setupProgressBarAction = this.Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
-                           {
-                              this.SetupProgressBar(
-                                 face.FaceAttributes.Emotion.Anger,
-                                 face.FaceAttributes.Emotion.Contempt,
-                                 face.FaceAttributes.Emotion.Disgust,
-                                 face.FaceAttributes.Emotion.Fear,
-                                 face.FaceAttributes.Emotion.Happiness,
-                                 face.FaceAttributes.Emotion.Sadness,
-                                 face.FaceAttributes.Emotion.Surprise,
-                                 face.FaceAttributes.Smile.Value);
-                           });
-
-
                            if (face.FaceAttributes.Emotion.Sadness >= 0.85)
                            {
                               if (lastDetectedEmotion != "Sadness")
@@ -430,6 +399,12 @@ namespace SmilePhotoKiosk
                      {
                         remoteFaces = new List<RemoteDetectedFace>();
                      }
+
+                     var updateVisualisationAgainAction = this.Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+                     {
+                        this.UpdateVisualisation();
+                     });
+
                   }
                }
             }
@@ -675,18 +650,6 @@ namespace SmilePhotoKiosk
       //      });
       //   }
       //}
-
-      private void SetupProgressBar(double anger, double contempt, double disgust, double fear, double happiness, double sadness, double surprise, double smile)
-      {
-         progress_anger.Value = anger * progress_anger.Maximum;
-         progress_contempt.Value = contempt * progress_contempt.Maximum;
-         progress_disgust.Value = disgust * progress_disgust.Maximum;
-         progress_fear.Value = fear * progress_fear.Maximum;
-         progress_happiness.Value = happiness * progress_happiness.Maximum;
-         progress_sadness.Value = sadness * progress_sadness.Maximum;
-         progress_surprise.Value = surprise * progress_surprise.Maximum;
-         progress_smile.Value = smile * progress_smile.Maximum;
-      }
 
       /// <summary>
       /// Handles MediaCapture stream failures by shutting down streaming and returning to Idle state.

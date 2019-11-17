@@ -15,41 +15,7 @@
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
-            <StackPanel x:Name="TopPanel" Margin="0,0,0,8">
-            <StackPanel x:Name="Anger" Orientation="Horizontal">
-               <TextBlock Text="Anger" Width="80" VerticalAlignment="Center" Margin="8,0,8,0"/>
-               <ProgressBar Name="progress_anger" VerticalAlignment="Center" Maximum="100" Value="0" Width="1000" />
-            </StackPanel>
-            <StackPanel x:Name="Contempt" Orientation="Horizontal">
-               <TextBlock Text="Contempt" Width="80" VerticalAlignment="Center" Margin="8,0,8,0"/>
-               <ProgressBar Name="progress_contempt" VerticalAlignment="Center" Maximum="100" Value="0" Width="1000" />
-            </StackPanel>
-            <StackPanel x:Name="Disgust" Orientation="Horizontal">
-               <TextBlock Text="Disgust" Width="80" VerticalAlignment="Center" Margin="8,0,8,0"/>
-               <ProgressBar Name="progress_disgust" VerticalAlignment="Center" Maximum="100" Value="0" Width="1000" />
-            </StackPanel>
-            <StackPanel x:Name="Fear" Orientation="Horizontal">
-               <TextBlock Text="Fear" Width="80" VerticalAlignment="Center" Margin="8,0,8,0"/>
-               <ProgressBar Name="progress_fear" VerticalAlignment="Center" Maximum="100" Value="0" Width="1000" />
-            </StackPanel>
-            <StackPanel x:Name="Happiness" Orientation="Horizontal">
-               <TextBlock Text="Happiness" Width="80" VerticalAlignment="Center" Margin="8,0,8,0"/>
-               <ProgressBar Name="progress_happiness" VerticalAlignment="Center" Maximum="100" Value="0" Width="1000" />
-            </StackPanel>
-            <StackPanel x:Name="Sadness" Orientation="Horizontal">
-               <TextBlock Text="Sadness" Width="80" VerticalAlignment="Center" Margin="8,0,8,0"/>
-               <ProgressBar Name="progress_sadness" VerticalAlignment="Center" Maximum="100" Value="0" Width="1000" />
-            </StackPanel>
-            <StackPanel x:Name="Surprise" Orientation="Horizontal">
-               <TextBlock Text="Surprise" Width="80" VerticalAlignment="Center" Margin="8,0,8,0"/>
-               <ProgressBar Name="progress_surprise" VerticalAlignment="Center" Maximum="100" Value="0" Width="1000" />
-            </StackPanel>
-            <StackPanel x:Name="Smile" Orientation="Horizontal">
-               <TextBlock Text="Smile" Width="80" VerticalAlignment="Center" Margin="8,0,8,0"/>
-               <ProgressBar Name="progress_smile" VerticalAlignment="Center" Maximum="100" Value="0" Width="1000" />
-            </StackPanel>
-         </StackPanel>
-
+            <StackPanel x:Name="TopPanel" Margin="0,0,0,8"></StackPanel>
             <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Grid.Row="1">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
