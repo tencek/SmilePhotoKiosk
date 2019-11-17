@@ -17,7 +17,6 @@ using Windows.Media;
 using Windows.Media.Capture;
 using Windows.Media.FaceAnalysis;
 using Windows.Media.MediaProperties;
-using Windows.System.Threading;
 using Windows.UI.Xaml.Shapes;
 using Windows.Storage;
 using Windows.Storage.Streams;
@@ -26,10 +25,9 @@ using Microsoft.Azure.CognitiveServices.Vision.Face;
 using Microsoft.Azure.CognitiveServices.Vision.Face.Models;
 using LocalDetectedFace = Windows.Media.FaceAnalysis.DetectedFace;
 using RemoteDetectedFace = Microsoft.Azure.CognitiveServices.Vision.Face.Models.DetectedFace;
-using Windows.Media.Core;
+
 using Windows.Media.Capture.Frames;
 using Windows.Foundation;
-using System.Diagnostics;
 
 namespace SmilePhotoKiosk
 {
@@ -657,29 +655,6 @@ namespace SmilePhotoKiosk
             encoder.SetSoftwareBitmap(bitmap);
             await encoder.FlushAsync();
          }
-      }
-
-      private static Task<int> RunProcessAsync()
-      {
-         var tcs = new TaskCompletionSource<int>();
-
-         var process = new Process
-         {
-            StartInfo = {
-               FileName = "",
-               Arguments = "" },
-            EnableRaisingEvents = true
-         };
-
-         process.Exited += (_sender, _args) =>
-         {
-            tcs.SetResult(process.ExitCode);
-            process.Dispose();
-         };
-
-         process.Start();
-
-         return tcs.Task;
       }
 
       private unsafe SoftwareBitmap CropImageByRect(SoftwareBitmap inputBitmap, FaceRectangle rect)
