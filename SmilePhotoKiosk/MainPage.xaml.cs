@@ -442,7 +442,7 @@ namespace SmilePhotoKiosk
 
          foreach (var box in boxes)
          {
-            this.VisualizationCanvas.Children.Add(box);
+            canvas.Children.Add(box);
          }
       }
 
