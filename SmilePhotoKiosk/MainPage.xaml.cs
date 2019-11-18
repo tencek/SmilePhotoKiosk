@@ -254,6 +254,8 @@ namespace SmilePhotoKiosk
             // Immediately start streaming to our CaptureElement UI.
             // NOTE: CaptureElement's Source must be set before streaming is started.
             this.CamPreview.Source = this.mediaCapture;
+            this.CamPreview.FlowDirection = FlowDirection.RightToLeft;
+            this.VisualizationCanvas.FlowDirection = FlowDirection.RightToLeft;
             await this.mediaCapture.StartPreviewAsync();
          }
          catch (System.UnauthorizedAccessException)
