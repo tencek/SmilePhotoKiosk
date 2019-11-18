@@ -465,6 +465,7 @@ namespace SmilePhotoKiosk
 
                   Text = emotionLabel,
                   FontSize = 24,
+                  FlowDirection = FlowDirection.LeftToRight,
                   Foreground = this.lineBrush,
                   Margin = new Thickness(
                                     (uint)(canvas.ActualWidth * (relativeRectangle.Left + relativeRectangle.Width)),
