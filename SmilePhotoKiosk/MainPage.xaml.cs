@@ -109,6 +109,12 @@ namespace SmilePhotoKiosk
 
       private string lastDetectedEmotion = "None";
 
+      private Size currentFrameSize = new Size(1, 1);
+
+      private IList<LocalDetectedFace> localFaces = new List<LocalDetectedFace>();
+
+      private IList<RemoteDetectedFace> remoteFaces = new List<RemoteDetectedFace>();
+
       /// <summary>
       /// Initializes a new instance of the <see cref="TrackFacesInWebcam"/> class.
       /// </summary>
@@ -283,34 +289,15 @@ namespace SmilePhotoKiosk
                {
                   if (videoFrame != null)
                   {
-                     var localFaces = await FindFacesOnFrameLocalAsync(videoFrame);
-                     var relativeRectangles = GetFaceRectanglesRelativeToFrame(localFaces, videoFrame);
-                     var displayRectanglesAction = this.Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
-                     {
-                        this.DisplayRelativeRectangles(this.VisualizationCanvas, relativeRectangles);
-                     });
+                     currentFrameSize = new Size(videoFrame.SoftwareBitmap.PixelWidth, videoFrame.SoftwareBitmap.PixelHeight);
+                     localFaces = await FindFacesOnFrameLocalAsync(videoFrame);
 
                      if (localFaces.Count > 0)
                      {
-                        var remoteFaces = await FindFacesOnFrameRemoteAsync(videoFrame);
+                        remoteFaces = await FindFacesOnFrameRemoteAsync(videoFrame);
                         if (remoteFaces.Count > 0)
                         {
                            var face = remoteFaces.First();
-
-                           var setupProgressBarAction = this.Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
-                           {
-                              this.SetupProgressBar(
-                                 face.FaceAttributes.Emotion.Anger,
-                                 face.FaceAttributes.Emotion.Contempt,
-                                 face.FaceAttributes.Emotion.Disgust,
-                                 face.FaceAttributes.Emotion.Fear,
-                                 face.FaceAttributes.Emotion.Happiness,
-                                 face.FaceAttributes.Emotion.Sadness,
-                                 face.FaceAttributes.Emotion.Surprise,
-                                 face.FaceAttributes.Smile.Value);
-                           });
-
-
                            if (face.FaceAttributes.Emotion.Sadness >= 0.85)
                            {
                               if (lastDetectedEmotion != "Sadness")
@@ -410,6 +397,16 @@ namespace SmilePhotoKiosk
                            }
                         }
                      }
+                     else
+                     {
+                        remoteFaces = new List<RemoteDetectedFace>();
+                     }
+
+                     var updateVisualisationAgainAction = this.Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+                     {
+                        this.UpdateVisualisation();
+                     });
+
                   }
                }
             }
@@ -421,6 +418,105 @@ namespace SmilePhotoKiosk
          finally
          {
             frameProcessingSemaphore.Release();
+         }
+      }
+
+      private void UpdateVisualisation()
+      {
+         this.VisualizationCanvas.Children.Clear();
+
+         if (remoteFaces.Count() > 0)
+         {
+            var relativeRectangles = GetFaceRectanglesRelativeToFrame(remoteFaces, currentFrameSize);
+            this.DisplayRelativeRectangles(this.VisualizationCanvas, relativeRectangles);
+
+            string emotionTextItem(RemoteDetectedFace face, string emotIcon, Func<Emotion, double> emotionEvaluator)
+            {
+               string textualProgressBar(double value)
+               {
+                  const int segmentCount = 7;
+                  const double segmentSize = 1.0 / segmentCount;
+                  var segmentsFilled = (int)((value + segmentSize / 2) / segmentSize);
+                  return new string('⬛', segmentsFilled) + new string('⬜', segmentCount - segmentsFilled);
+               }
+               return emotIcon + " " + textualProgressBar(emotionEvaluator(face.FaceAttributes.Emotion));
+            }
+
+            Rectangle faceRectangleCanvasItem(Canvas canvas, RelativeRectangle relativeRectangle)
+            {
+               return new Rectangle()
+               {
+                  Width = (uint)(canvas.ActualWidth * relativeRectangle.Width),
+                  Height = (uint)(canvas.ActualHeight * relativeRectangle.Height),
+                  Margin = new Thickness(
+                           (uint)(canvas.ActualWidth * relativeRectangle.Left),
+                           (uint)(canvas.ActualHeight * relativeRectangle.Top),
+                           0, 0),
+                  Fill = this.fillBrush,
+                  Stroke = this.lineBrush,
+                  StrokeThickness = this.lineThickness,
+               };
+            }
+
+            TextBlock emotionCanvasItem(Canvas canvas, RelativeRectangle relativeRectangle, string emotionLabel, int rowNumber)
+            {
+               int fontSize = 24;
+               int rowHeight = fontSize * 5 / 4;
+               if (canvas.ActualHeight * relativeRectangle.Height < 7 * rowHeight)
+               {
+                  fontSize = 12;
+                  rowHeight = fontSize * 5 / 4;
+               }
+               int leftMargin = 5 * rowHeight;
+               var xPosition = (uint)(canvas.ActualWidth * (relativeRectangle.Left + relativeRectangle.Width));
+               if (xPosition + leftMargin > canvas.ActualWidth)
+               {
+                  xPosition = (uint)(canvas.ActualWidth * relativeRectangle.Left);
+               }
+               var yPosition = (uint)(canvas.ActualHeight * (relativeRectangle.Top + relativeRectangle.Height) - rowNumber * rowHeight);
+               return new TextBlock()
+               {
+
+                  Text = emotionLabel,
+                  FontSize = fontSize,
+                  FlowDirection = FlowDirection.LeftToRight,
+                  Foreground = this.lineBrush,
+                  Margin = new Thickness(xPosition, yPosition, 0, 0)
+               };
+            }
+
+            var remoteFacesAttributes =
+               from remoteFace in remoteFaces
+               select
+               new
+               {
+                  face = remoteFace.FaceId,
+                  relativeRectangle = GetFaceRectangleRelativeToFrame(remoteFace, currentFrameSize),
+                  emotionTextItems = new List<string>
+                  {
+                     emotionTextItem(remoteFace, "😠", emotion => emotion.Anger),
+                     emotionTextItem(remoteFace, "🤨", emotion => emotion.Contempt),
+                     emotionTextItem(remoteFace, "😫", emotion => emotion.Disgust),
+                     emotionTextItem(remoteFace, "😱", emotion => emotion.Fear),
+                     emotionTextItem(remoteFace, "😁", emotion => emotion.Happiness),
+                     emotionTextItem(remoteFace, "☹️", emotion => emotion.Sadness),
+                     emotionTextItem(remoteFace, "😮", emotion => emotion.Surprise)
+                  }
+               };
+
+            foreach (var remoteFaceAttributes in remoteFacesAttributes)
+            {
+               this.VisualizationCanvas.Children.Add(faceRectangleCanvasItem(this.VisualizationCanvas, remoteFaceAttributes.relativeRectangle));
+               for (var i = 0; i<remoteFaceAttributes.emotionTextItems.Count(); ++i)
+               {
+                  this.VisualizationCanvas.Children.Add(
+                     emotionCanvasItem(
+                        this.VisualizationCanvas,
+                        remoteFaceAttributes.relativeRectangle,
+                        remoteFaceAttributes.emotionTextItems[i],
+                        i + 1));
+               }
+            }
          }
       }
 
@@ -448,21 +544,39 @@ namespace SmilePhotoKiosk
          }
       }
 
-
-      private RelativeRectangle GetFaceRectangleRelativeToFrame(LocalDetectedFace face, VideoFrame videoFrame)
+      private void DisplayFacesAttributes(Canvas canvas, IEnumerable<RemoteDetectedFace> remoteDetectedFaces)
       {
-         double left = (double)face.FaceBox.X / (double)videoFrame.SoftwareBitmap.PixelWidth;
-         double top = (double)face.FaceBox.Y / (double)videoFrame.SoftwareBitmap.PixelHeight;
-         double width = (double)face.FaceBox.Width / (double)videoFrame.SoftwareBitmap.PixelWidth;
-         double height = (double)face.FaceBox.Height / (double)videoFrame.SoftwareBitmap.PixelHeight;
-         return new RelativeRectangle( left: left, top: top, width: width, height: height );
       }
 
-      private IList<RelativeRectangle> GetFaceRectanglesRelativeToFrame(IEnumerable<LocalDetectedFace> faces, VideoFrame videoFrame)
+      private RelativeRectangle GetFaceRectangleRelativeToFrame(LocalDetectedFace face, Size videoFrameSize)
+      {
+         double left = (double)face.FaceBox.X / (double)videoFrameSize.Width;
+         double top = (double)face.FaceBox.Y / (double)videoFrameSize.Height;
+         double width = (double)face.FaceBox.Width / (double)videoFrameSize.Width;
+         double height = (double)face.FaceBox.Height / (double)videoFrameSize.Height;
+         return new RelativeRectangle(left: left, top: top, width: width, height: height);
+      }
+
+      private IList<RelativeRectangle> GetFaceRectanglesRelativeToFrame(IEnumerable<LocalDetectedFace> faces, Size videoFrameSize)
       {
          return
             (from face in faces
-             select GetFaceRectangleRelativeToFrame(face, videoFrame)).ToList();
+             select GetFaceRectangleRelativeToFrame(face, videoFrameSize)).ToList();
+      }
+      private RelativeRectangle GetFaceRectangleRelativeToFrame(RemoteDetectedFace face, Size videoFrameSize)
+      {
+         double left = (double)face.FaceRectangle.Left / (double)videoFrameSize.Width;
+         double top = (double)face.FaceRectangle.Top / (double)videoFrameSize.Height;
+         double width = (double)face.FaceRectangle.Width / (double)videoFrameSize.Width;
+         double height = (double)face.FaceRectangle.Height / (double)videoFrameSize.Height;
+         return new RelativeRectangle(left: left, top: top, width: width, height: height);
+      }
+
+      private IList<RelativeRectangle> GetFaceRectanglesRelativeToFrame(IEnumerable<RemoteDetectedFace> faces, Size videoFrameSize)
+      {
+         return
+            (from face in faces
+             select GetFaceRectangleRelativeToFrame(face, videoFrameSize)).ToList();
       }
 
       private async Task<IList<LocalDetectedFace>> FindFacesOnFrameLocalAsync(VideoFrame videoFrame)
@@ -550,18 +664,6 @@ namespace SmilePhotoKiosk
       //      });
       //   }
       //}
-
-      private void SetupProgressBar(double anger, double contempt, double disgust, double fear, double happiness, double sadness, double surprise, double smile)
-      {
-         progress_anger.Value = anger * progress_anger.Maximum;
-         progress_contempt.Value = contempt * progress_contempt.Maximum;
-         progress_disgust.Value = disgust * progress_disgust.Maximum;
-         progress_fear.Value = fear * progress_fear.Maximum;
-         progress_happiness.Value = happiness * progress_happiness.Maximum;
-         progress_sadness.Value = sadness * progress_sadness.Maximum;
-         progress_surprise.Value = surprise * progress_surprise.Maximum;
-         progress_smile.Value = smile * progress_smile.Maximum;
-      }
 
       /// <summary>
       /// Handles MediaCapture stream failures by shutting down streaming and returning to Idle state.
