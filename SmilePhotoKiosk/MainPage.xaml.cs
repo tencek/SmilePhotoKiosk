@@ -432,7 +432,7 @@ namespace SmilePhotoKiosk
             {
                string textualProgressBar(double value)
                {
-                  const int segmentCount = 10;
+                  const int segmentCount = 7;
                   const double segmentSize = 1.0 / segmentCount;
                   var segmentsFilled = (int)((value + segmentSize / 2) / segmentSize);
                   return new string('⬛', segmentsFilled) + new string('⬜', segmentCount - segmentsFilled);
@@ -465,7 +465,7 @@ namespace SmilePhotoKiosk
                   FontSize = 24,
                   Foreground = this.lineBrush,
                   Margin = new Thickness(
-                                    (uint)(canvas.ActualWidth * relativeRectangle.Left + 1),
+                                    (uint)(canvas.ActualWidth * (relativeRectangle.Left + relativeRectangle.Width)),
                                     (uint)(canvas.ActualHeight * (relativeRectangle.Top + relativeRectangle.Height) - rowNumber * 30),
                                     0, 0)
                };
