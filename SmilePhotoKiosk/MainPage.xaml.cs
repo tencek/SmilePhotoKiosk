@@ -460,17 +460,28 @@ namespace SmilePhotoKiosk
 
             TextBlock emotionCanvasItem(Canvas canvas, RelativeRectangle relativeRectangle, string emotionLabel, int rowNumber)
             {
+               int fontSize = 24;
+               int rowHeight = fontSize * 5 / 4;
+               if (canvas.ActualHeight * relativeRectangle.Height < 7 * rowHeight)
+               {
+                  fontSize = 12;
+                  rowHeight = fontSize * 5 / 4;
+               }
+               int leftMargin = 5 * rowHeight;
+               var xPosition = (uint)(canvas.ActualWidth * (relativeRectangle.Left + relativeRectangle.Width));
+               if (xPosition + leftMargin > canvas.ActualWidth)
+               {
+                  xPosition = (uint)(canvas.ActualWidth * relativeRectangle.Left);
+               }
+               var yPosition = (uint)(canvas.ActualHeight * (relativeRectangle.Top + relativeRectangle.Height) - rowNumber * rowHeight);
                return new TextBlock()
                {
 
                   Text = emotionLabel,
-                  FontSize = 24,
+                  FontSize = fontSize,
                   FlowDirection = FlowDirection.LeftToRight,
                   Foreground = this.lineBrush,
-                  Margin = new Thickness(
-                                    (uint)(canvas.ActualWidth * (relativeRectangle.Left + relativeRectangle.Width)),
-                                    (uint)(canvas.ActualHeight * (relativeRectangle.Top + relativeRectangle.Height) - rowNumber * 30),
-                                    0, 0)
+                  Margin = new Thickness(xPosition, yPosition, 0, 0)
                };
             }
 
