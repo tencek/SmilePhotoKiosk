@@ -18,9 +18,9 @@ $onNewPictureCreated =
 {
     $newPicturePath = $event.SourceEventArgs.FullPath
     $newPictureName = $event.SourceEventArgs.Name
-    $label = $newPictureName -replace ".* ([a-zA-Z]+!).*",'$1'
+    $label = $newPictureName -replace ".* ([a-zA-Z]+).*",'$1'
     Write-Host "New picture $newPictureName created!"
-    Pos4NetImagePrinter /width Full /Label "Moje dojmy z Edhouse DOD: $label" /Conversion bmp32 /printer $PosPrinter /path "$newPicturePath"
+    Pos4NetImagePrinter /width Full /Label "Moje dojmy z Edhouse DOD: $label!" /Conversion bmp32 /printer $PosPrinter /path "$newPicturePath"
 }
 
 # Create file system watcher
