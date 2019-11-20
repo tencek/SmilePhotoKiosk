@@ -550,47 +550,6 @@ namespace SmilePhotoKiosk
          this.mediaCapture = null;
       }
 
-      //private async Task ProcessCurrentVideoFrameAsync(IList<RemoteDetectedFace> remoteFaces)
-      //{
-      //   try
-      //   {
-      //      if (remoteFaces.Count > 0)
-      //      {
-      //         var remoteFace = remoteFaces[0];
-
-      //         // Create our visualization using the frame dimensions and face results but run it on the UI thread.
-      //         var videoFrameSize = new Windows.Foundation.Size(videoFrame.SoftwareBitmap.PixelWidth, videoFrame.SoftwareBitmap.PixelHeight);
-      //         var ignored = this.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
-      //         {
-      //            this.SetupVisualization(videoFrameSize, remoteFaces);
-      //            this.SetupProgressBar(
-      //               remoteFace.FaceAttributes.Emotion.Anger,
-      //               remoteFace.FaceAttributes.Emotion.Contempt,
-      //               remoteFace.FaceAttributes.Emotion.Disgust,
-      //               remoteFace.FaceAttributes.Emotion.Fear,
-      //               remoteFace.FaceAttributes.Emotion.Happiness,
-      //               remoteFace.FaceAttributes.Emotion.Sadness,
-      //               remoteFace.FaceAttributes.Emotion.Surprise,
-      //               remoteFace.FaceAttributes.Smile.Value);
-      //         });
-
-      //         if (remoteFace.FaceAttributes.Smile.Value > smileThreshold)
-      //         {
-      //            var file = await captureFolder.CreateFileAsync("SmileFace.jpg", CreationCollisionOption.GenerateUniqueName);
-      //            var croppedBitmap = CropImageByRect(videoFrame.SoftwareBitmap, remoteFace.FaceRectangle);
-      //            await SaveSoftwareBitmapAsync(croppedBitmap, file);
-      //         }
-      //      }
-      //   }
-      //   catch (Exception ex)
-      //   {
-      //      var ignored = this.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
-      //      {
-      //         NotifyUser(ex.ToString(), NotifyType.ErrorMessage);
-      //      });
-      //   }
-      //}
-
       /// <summary>
       /// Handles MediaCapture stream failures by shutting down streaming and returning to Idle state.
       /// </summary>
