@@ -8,7 +8,6 @@ using System.Runtime.InteropServices;
 
 using Windows.UI.Core;
 using Windows.UI.Xaml;
-using Windows.UI.Xaml.Automation.Peers;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Navigation;
@@ -31,12 +30,6 @@ using Windows.Foundation;
 
 namespace SmilePhotoKiosk
 {
-   public enum NotifyType
-   {
-      StatusMessage,
-      ErrorMessage
-   };
-
    [ComImport]
    [Guid("5b0d3235-4dba-4d44-865e-8f1d0e4fd04d")]
    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -257,12 +250,12 @@ namespace SmilePhotoKiosk
          catch (System.UnauthorizedAccessException)
          {
             // If the user has disabled their webcam this exception is thrown; provide a descriptive message to inform the user of this fact.
-            NotifyUser("Webcam is disabled or access to the webcam is disabled for this app.\nEnsure Privacy Settings allow webcam usage.", NotifyType.ErrorMessage);
+            await LogError("Webcam is disabled or access to the webcam is disabled for this app.\nEnsure Privacy Settings allow webcam usage.");
             successful = false;
          }
          catch (Exception ex)
          {
-            NotifyUser(ex.ToString(), NotifyType.ErrorMessage);
+            await LogError(ex.ToString());
             successful = false;
          }
 
@@ -342,7 +335,7 @@ namespace SmilePhotoKiosk
          }
          catch (Exception ex)
          {
-            NotifyUser(ex.ToString(), NotifyType.ErrorMessage);
+            await LogError(ex.ToString());
          }
          finally
          {
@@ -564,14 +557,19 @@ namespace SmilePhotoKiosk
          });
       }
 
-      /// <summary>
-      /// Display a message to the user.
-      /// This method may be called from any thread.
-      /// </summary>
-      /// <param name="strMessage"></param>
-      /// <param name="type"></param>
-      private void NotifyUser(string strMessage, NotifyType type)
+      private async Task Log(LogType logType, string message)
       {
+         await ((App)App.Current).WriteMessageAsync(logType, message);
+      }
+
+      private async Task LogError(string errorMessage)
+      {
+         await Log(LogType.Error, errorMessage);
+      }
+
+      private async Task LogStatus(string statusMessage)
+      {
+         await Log(LogType.Status, statusMessage);
       }
 
       /// <summary>
