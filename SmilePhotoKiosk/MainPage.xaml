@@ -20,15 +20,15 @@
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
-                <StackPanel Orientation="Horizontal" Grid.Row="0">
+                <StackPanel Orientation="Horizontal" Grid.Row="0" Visibility="Collapsed">
                   <TextBlock Text="Api key:" VerticalAlignment="Center" Margin="8,0,4,0"/>
                   <TextBox Name="ApiKey" HorizontalAlignment="Stretch" Text="API key"/>
                   <TextBlock Text="Api end-point:" VerticalAlignment="Center" Margin="8,0,4,0"/>
                   <TextBox Name="ApiEndPoint" HorizontalAlignment="Stretch" Text="API end-point"/>
                 </StackPanel>
 
-                <CaptureElement Name="CamPreview" Grid.Row="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Stretch="Fill" Margin="0,8,0,0" />
-                <Canvas Name="VisualizationCanvas" Grid.Row="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="0,8,0,0" />
+                <CaptureElement Name="CamPreview" Grid.Row="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Stretch="Fill" Margin="0,0,0,0" />
+                <Canvas Name="VisualizationCanvas" Grid.Row="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="0,0,0,0" />
             </Grid>
       </Grid>
     </Grid>
