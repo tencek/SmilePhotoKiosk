@@ -18,11 +18,11 @@ For the further photo processing, there is a [PowerShell](https://docs.microsoft
 ## Available emotions
 The list of available emotions is specified by the [Emotion class](https://docs.microsoft.com/en-us/dotnet/api/microsoft.azure.cognitiveservices.vision.face.models.emotion?view=azure-dotnet):
 
-* Anger
-* Contempt
-* Disgust
-* Fear
-* Happiness
-* Neutral
-* Sadness
-* Surprise
+* 😠 Anger
+* 🤨 Contempt
+* 😫 Disgust
+* 😱 Fear
+* 😁 Happiness
+* Neutral (not used)
+* ☹️ Sadness
+* 😮 Surprise
