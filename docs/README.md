@@ -9,7 +9,7 @@ Uses [Microsoft Cognitive Services - Face](https://azure.microsoft.com/en-us/ser
 ## What the photo kiosk does
 
  1. It uses the [FaceTracker](https://docs.microsoft.com/en-us/uwp/api/windows.media.faceanalysis.facetracker) to analyze the camera stream loacally searching for the faces.
- 1. When there is some face detected, it uses the [FaceClient](https://docs.microsoft.com/en-us/dotnet/api/microsoft.azure.cognitiveservices.vision.face.faceclient?view=azure-dotnet) from the Microsoft Cognitive Services Azure API to detect the person's emotions. The level of emotions are visualised using a simple in-picture progress bars.
+ 1. When there is a face detected, it uses the [FaceClient](https://docs.microsoft.com/en-us/dotnet/api/microsoft.azure.cognitiveservices.vision.face.faceclient?view=azure-dotnet) from the Microsoft Cognitive Services Azure API to detect the person's emotions. The level of emotions are visualised using a simple in-picture progress bars.
  ![SmilePhotoKiosk progress bars](SmilePhotoKiosk-ProgressBars.png "SmilePhotoKiosk progress bars")
  1. If an particular emotion is above the predefined threshold, the kiosk stores the photo of the face into the ["My pictures"](https://docs.microsoft.com/en-us/uwp/api/windows.storage.knownlibraryid) folder.
 
