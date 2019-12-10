@@ -3,7 +3,7 @@
 #
 
 $PosPrinter = "TM-T88VMU"
-$Pos4NetImagePrinter = "C:\Users\pk250193\source\repos\tencek\Pos4NetImagePrinter\src\Pos4NetImagePrinter\bin\Debug\net472\Pos4NetImagePrinter.exe"
+$Pos4NetImagePrinter = "C:\Users\Manžel\source\repos\Pos4NetImagePrinter\src\Pos4NetImagePrinter\bin\Debug\net472\Pos4NetImagePrinter.exe"
 $pictureFolderPath = [environment]::GetFolderPath("mypictures")
 
 #######################################################
@@ -17,8 +17,10 @@ Get-EventSubscriber | Unregister-Event
 $onNewPictureCreated =
 {
     $newPicturePath = $event.SourceEventArgs.FullPath
-    Write-Host "New picture $newPicturePath created!"
-    Pos4NetImagePrinter /width Full /FileNameAsLabel /Conversion bmp32 /printer $PosPrinter /path "$newPicturePath"
+    $newPictureName = $event.SourceEventArgs.Name
+    $label = $newPictureName -replace ".* ([a-zA-Z]+).*",'$1'
+    Write-Host "New picture $newPictureName created!"
+    Pos4NetImagePrinter /width Full /Label "Moje dojmy z Edhouse DOD: $label!" /Conversion bmp32 /printer $PosPrinter /path "$newPicturePath"
 }
 
 # Create file system watcher

@@ -8,7 +8,6 @@ using System.Runtime.InteropServices;
 
 using Windows.UI.Core;
 using Windows.UI.Xaml;
-using Windows.UI.Xaml.Automation.Peers;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Navigation;
@@ -31,12 +30,6 @@ using Windows.Foundation;
 
 namespace SmilePhotoKiosk
 {
-   public enum NotifyType
-   {
-      StatusMessage,
-      ErrorMessage
-   };
-
    [ComImport]
    [Guid("5b0d3235-4dba-4d44-865e-8f1d0e4fd04d")]
    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -107,7 +100,9 @@ namespace SmilePhotoKiosk
       // Folder in which the captures will be stored (initialized in InitializeCameraAsync)
       private StorageFolder captureFolder = null;
 
-      private string lastDetectedEmotion = "None";
+      private DateTime lastPrintedTime = DateTime.MinValue;
+
+      private Size currentFrameSize = new Size(1, 1);
 
       /// <summary>
       /// Initializes a new instance of the <see cref="TrackFacesInWebcam"/> class.
@@ -248,17 +243,19 @@ namespace SmilePhotoKiosk
             // Immediately start streaming to our CaptureElement UI.
             // NOTE: CaptureElement's Source must be set before streaming is started.
             this.CamPreview.Source = this.mediaCapture;
+            this.CamPreview.FlowDirection = FlowDirection.RightToLeft;
+            this.VisualizationCanvas.FlowDirection = FlowDirection.RightToLeft;
             await this.mediaCapture.StartPreviewAsync();
          }
          catch (System.UnauthorizedAccessException)
          {
             // If the user has disabled their webcam this exception is thrown; provide a descriptive message to inform the user of this fact.
-            NotifyUser("Webcam is disabled or access to the webcam is disabled for this app.\nEnsure Privacy Settings allow webcam usage.", NotifyType.ErrorMessage);
+            await LogError("Webcam is disabled or access to the webcam is disabled for this app.\nEnsure Privacy Settings allow webcam usage.");
             successful = false;
          }
          catch (Exception ex)
          {
-            NotifyUser(ex.ToString(), NotifyType.ErrorMessage);
+            await LogError(ex.ToString());
             successful = false;
          }
 
@@ -281,144 +278,168 @@ namespace SmilePhotoKiosk
                {
                   if (videoFrame != null)
                   {
+                     currentFrameSize = new Size(videoFrame.SoftwareBitmap.PixelWidth, videoFrame.SoftwareBitmap.PixelHeight);
                      var localFaces = await FindFacesOnFrameLocalAsync(videoFrame);
-                     var relativeRectangles = GetFaceRectanglesRelativeToFrame(localFaces, videoFrame);
-                     var displayRectanglesAction = this.Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
-                     {
-                        this.DisplayRelativeRectangles(this.VisualizationCanvas, relativeRectangles);
-                     });
+                     IList<RemoteDetectedFace> remoteFaces = new List<RemoteDetectedFace>();
 
                      if (localFaces.Count > 0)
                      {
-                        var remoteFaces = await FindFacesOnFrameRemoteAsync(videoFrame);
-                        if (remoteFaces.Count > 0)
+                        remoteFaces = await FindFacesOnFrameRemoteAsync(videoFrame);
+
+                        var minDelay = TimeSpan.FromSeconds(3);
+                        if (remoteFaces.Count > 0 && DateTime.Now.Subtract(lastPrintedTime) > minDelay)
                         {
-                           var face = remoteFaces.First();
+                           async Task checkForEmotionAsync(Func<RemoteDetectedFace, double> emotionEvaluator, double threshold, string label, SoftwareBitmap bitmap, RemoteDetectedFace face)
+                           {
+                              var emotionValue = emotionEvaluator(face);
+                              if (emotionValue >= threshold)
+                              {
+                                 var percent = (int)Math.Round(emotionValue * 100.0);
+                                 var fileName = $"{percent}% {label}.jpg";
+                                 var file = await captureFolder.CreateFileAsync(fileName, CreationCollisionOption.GenerateUniqueName);
+                                 var bgraBitmap = SoftwareBitmap.Convert(bitmap, BitmapPixelFormat.Bgra8);
+                                 var croppedBitmap = CropImageByRect(bgraBitmap, face.FaceRectangle);
+                                 await SaveSoftwareBitmapAsync(croppedBitmap, file);
+                                 lastPrintedTime = DateTime.Now;
+                              }
+                           }
 
-                           var setupProgressBarAction = this.Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+                           List<Func<RemoteDetectedFace, Task>> emotionCheckFuncs = new List<Func<RemoteDetectedFace, Task>>()
                            {
-                              this.SetupProgressBar(
-                                 face.FaceAttributes.Emotion.Anger,
-                                 face.FaceAttributes.Emotion.Contempt,
-                                 face.FaceAttributes.Emotion.Disgust,
-                                 face.FaceAttributes.Emotion.Fear,
-                                 face.FaceAttributes.Emotion.Happiness,
-                                 face.FaceAttributes.Emotion.Sadness,
-                                 face.FaceAttributes.Emotion.Surprise,
-                                 face.FaceAttributes.Smile.Value);
-                           });
+                              (face) => checkForEmotionAsync((f) => f.FaceAttributes.Emotion.Sadness, 0.75, "smutek", videoFrame.SoftwareBitmap, face),
+                              (face) => checkForEmotionAsync((f) => f.FaceAttributes.Emotion.Happiness, 0.95, "stesti", videoFrame.SoftwareBitmap, face),
+                              (face) => checkForEmotionAsync((f) => f.FaceAttributes.Emotion.Fear, 0.75, "strach", videoFrame.SoftwareBitmap, face),
+                              (face) => checkForEmotionAsync((f) => f.FaceAttributes.Emotion.Disgust, 0.75, "znechuceni", videoFrame.SoftwareBitmap, face),
+                              (face) => checkForEmotionAsync((f) => f.FaceAttributes.Emotion.Contempt, 0.75, "pohrdani", videoFrame.SoftwareBitmap, face),
+                              (face) => checkForEmotionAsync((f) => f.FaceAttributes.Emotion.Anger, 0.75, "vztek", videoFrame.SoftwareBitmap, face),
+                              (face) => checkForEmotionAsync((f) => f.FaceAttributes.Emotion.Surprise, 0.85, "prekvapeni", videoFrame.SoftwareBitmap, face)
+                           };
 
-
-                           if (face.FaceAttributes.Emotion.Sadness >= 0.85)
+                           foreach (var face in remoteFaces)
                            {
-                              if (lastDetectedEmotion != "Sadness")
+                              foreach (var emotionCheckFunc in emotionCheckFuncs)
                               {
-                                 var percent = (int)Math.Round(face.FaceAttributes.Emotion.Sadness * 100.0);
-                                 var fileName = $"{percent}% smutek!.jpg";
-                                 var file = await captureFolder.CreateFileAsync(fileName, CreationCollisionOption.GenerateUniqueName);
-                                 var bgraBitmap = SoftwareBitmap.Convert(videoFrame.SoftwareBitmap, BitmapPixelFormat.Bgra8);
-                                 var croppedBitmap = CropImageByRect(bgraBitmap, face.FaceRectangle);
-                                 await SaveSoftwareBitmapAsync(croppedBitmap, file);
+                                 await emotionCheckFunc(face);
                               }
-                              lastDetectedEmotion = "Sadness";
-                           }
-                           else 
-                           //if (face.FaceAttributes.Emotion.Happiness >= 0.85)
-                           //{
-                           //   if (lastDetectedEmotion != "Happiness")
-                           //   {
-                           //      var percent = (int)Math.Round(face.FaceAttributes.Emotion.Happiness * 100.0);
-                           //      var fileName = $"{percent}% stesti!.jpg";
-                           //      var file = await captureFolder.CreateFileAsync(fileName, CreationCollisionOption.GenerateUniqueName);
-                           //      var bgraBitmap = SoftwareBitmap.Convert(videoFrame.SoftwareBitmap, BitmapPixelFormat.Bgra8);
-                           //      var croppedBitmap = CropImageByRect(bgraBitmap, face.FaceRectangle);
-                           //      await SaveSoftwareBitmapAsync(croppedBitmap, file);
-                           //   }
-                           //   lastDetectedEmotion = "Happiness";
-                           //}
-                           //else 
-                           if (face.FaceAttributes.Emotion.Fear >= 0.85)
-                           {
-                              if (lastDetectedEmotion != "Fear")
-                              {
-                                 var percent = (int)Math.Round(face.FaceAttributes.Emotion.Fear * 100.0);
-                                 var fileName = $"{percent}% strach!.jpg";
-                                 var file = await captureFolder.CreateFileAsync(fileName, CreationCollisionOption.GenerateUniqueName);
-                                 var bgraBitmap = SoftwareBitmap.Convert(videoFrame.SoftwareBitmap, BitmapPixelFormat.Bgra8);
-                                 var croppedBitmap = CropImageByRect(bgraBitmap, face.FaceRectangle);
-                                 await SaveSoftwareBitmapAsync(croppedBitmap, file);
-                              }
-                              lastDetectedEmotion = "Fear";
-                           }
-                           else if (face.FaceAttributes.Emotion.Disgust >= 0.85)
-                           {
-                              if (lastDetectedEmotion != "Disgust")
-                              {
-                                 var percent = (int)Math.Round(face.FaceAttributes.Emotion.Disgust * 100.0);
-                                 var fileName = $"{percent}% znechuceni!.jpg";
-                                 var file = await captureFolder.CreateFileAsync(fileName, CreationCollisionOption.GenerateUniqueName);
-                                 var bgraBitmap = SoftwareBitmap.Convert(videoFrame.SoftwareBitmap, BitmapPixelFormat.Bgra8);
-                                 var croppedBitmap = CropImageByRect(bgraBitmap, face.FaceRectangle);
-                                 await SaveSoftwareBitmapAsync(croppedBitmap, file);
-                              }
-                              lastDetectedEmotion = "Disgust";
-                           }
-                           else if(face.FaceAttributes.Emotion.Contempt >= 0.85)
-                           {
-                              if (lastDetectedEmotion != "Contempt")
-                              {
-                                 var percent = (int)Math.Round(face.FaceAttributes.Emotion.Contempt * 100.0);
-                                 var fileName = $"{percent}% pohrdani!.jpg";
-                                 var file = await captureFolder.CreateFileAsync(fileName, CreationCollisionOption.GenerateUniqueName);
-                                 var bgraBitmap = SoftwareBitmap.Convert(videoFrame.SoftwareBitmap, BitmapPixelFormat.Bgra8);
-                                 var croppedBitmap = CropImageByRect(bgraBitmap, face.FaceRectangle);
-                                 await SaveSoftwareBitmapAsync(croppedBitmap, file);
-                              }
-                              lastDetectedEmotion = "Contempt";
-                           }
-                           else if(face.FaceAttributes.Emotion.Anger >= 0.85)
-                           {
-                              if (lastDetectedEmotion != "Anger")
-                              {
-                                 var percent = (int)Math.Round(face.FaceAttributes.Emotion.Anger * 100.0);
-                                 var fileName = $"{percent}% vztek!.jpg";
-                                 var file = await captureFolder.CreateFileAsync(fileName, CreationCollisionOption.GenerateUniqueName);
-                                 var bgraBitmap = SoftwareBitmap.Convert(videoFrame.SoftwareBitmap, BitmapPixelFormat.Bgra8);
-                                 var croppedBitmap = CropImageByRect(bgraBitmap, face.FaceRectangle);
-                                 await SaveSoftwareBitmapAsync(croppedBitmap, file);
-                              }
-                              lastDetectedEmotion = "Anger";
-                           }
-                           else if (face.FaceAttributes.Emotion.Surprise >= 0.85)
-                           {
-                              if (lastDetectedEmotion != "Surprise")
-                              {
-                                 var percent = (int) Math.Round(face.FaceAttributes.Emotion.Surprise * 100.0);
-                                 var fileName = $"{percent}% prekvapeni!.jpg";
-                                 var file = await captureFolder.CreateFileAsync(fileName, CreationCollisionOption.GenerateUniqueName);
-                                 var bgraBitmap = SoftwareBitmap.Convert(videoFrame.SoftwareBitmap, BitmapPixelFormat.Bgra8);
-                                 var croppedBitmap = CropImageByRect(bgraBitmap, face.FaceRectangle);
-                                 await SaveSoftwareBitmapAsync(croppedBitmap, file);
-                              }
-                              lastDetectedEmotion = "Surprise";
-                           }
-                           else
-                           {
-                              lastDetectedEmotion = "None";
                            }
                         }
                      }
+
+                     var updateVisualisationAgainAction = this.Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+                     {
+                        this.UpdateVisualisation(remoteFaces);
+                     });
                   }
                }
             }
          }
          catch (Exception ex)
          {
-            NotifyUser(ex.ToString(), NotifyType.ErrorMessage);
+            await LogError(ex.ToString());
          }
          finally
          {
             frameProcessingSemaphore.Release();
+         }
+      }
+
+      private void UpdateVisualisation(IList<RemoteDetectedFace> remoteFaces)
+      {
+         this.VisualizationCanvas.Children.Clear();
+
+         if (remoteFaces.Count() > 0)
+         {
+            var relativeRectangles = GetFaceRectanglesRelativeToFrame(remoteFaces, currentFrameSize);
+            this.DisplayRelativeRectangles(this.VisualizationCanvas, relativeRectangles);
+
+            string emotionTextItem(RemoteDetectedFace face, string emotIcon, Func<Emotion, double> emotionEvaluator)
+            {
+               string textualProgressBar(double value)
+               {
+                  const int segmentCount = 7;
+                  const double segmentSize = 1.0 / segmentCount;
+                  var segmentsFilled = (int)((value + segmentSize / 2) / segmentSize);
+                  var segmentsEmpty = segmentCount - segmentsFilled;
+                  return new string('⬛', segmentsFilled) + new string('⬜', segmentsEmpty);
+               }
+               return emotIcon + " " + textualProgressBar(emotionEvaluator(face.FaceAttributes.Emotion));
+            }
+
+            Rectangle faceRectangleCanvasItem(Canvas canvas, RelativeRectangle relativeRectangle)
+            {
+               return new Rectangle()
+               {
+                  Width = (uint)(canvas.ActualWidth * relativeRectangle.Width),
+                  Height = (uint)(canvas.ActualHeight * relativeRectangle.Height),
+                  Margin = new Thickness(
+                           (uint)(canvas.ActualWidth * relativeRectangle.Left),
+                           (uint)(canvas.ActualHeight * relativeRectangle.Top),
+                           0, 0),
+                  Fill = this.fillBrush,
+                  Stroke = this.lineBrush,
+                  StrokeThickness = this.lineThickness,
+               };
+            }
+
+            TextBlock emotionCanvasItem(Canvas canvas, RelativeRectangle relativeRectangle, string emotionLabel, int rowNumber)
+            {
+               int fontSize = 24;
+               int rowHeight = fontSize * 5 / 4;
+               if (canvas.ActualHeight * relativeRectangle.Height < 7 * rowHeight)
+               {
+                  fontSize = 12;
+                  rowHeight = fontSize * 5 / 4;
+               }
+               int leftMargin = 5 * rowHeight;
+               var xPosition = (uint)(canvas.ActualWidth * (relativeRectangle.Left + relativeRectangle.Width));
+               if (xPosition + leftMargin > canvas.ActualWidth)
+               {
+                  xPosition = (uint)(canvas.ActualWidth * relativeRectangle.Left);
+               }
+               var yPosition = (uint)(canvas.ActualHeight * (relativeRectangle.Top + relativeRectangle.Height) - rowNumber * rowHeight);
+               return new TextBlock()
+               {
+
+                  Text = emotionLabel,
+                  FontSize = fontSize,
+                  FlowDirection = FlowDirection.LeftToRight,
+                  Foreground = this.lineBrush,
+                  Margin = new Thickness(xPosition, yPosition, 0, 0)
+               };
+            }
+
+            var remoteFacesAttributes =
+               from remoteFace in remoteFaces
+               select
+               new
+               {
+                  face = remoteFace.FaceId,
+                  relativeRectangle = GetFaceRectangleRelativeToFrame(remoteFace, currentFrameSize),
+                  emotionTextItems = new List<string>
+                  {
+                     emotionTextItem(remoteFace, "😠", emotion => emotion.Anger),
+                     emotionTextItem(remoteFace, "🤨", emotion => emotion.Contempt),
+                     emotionTextItem(remoteFace, "😫", emotion => emotion.Disgust),
+                     emotionTextItem(remoteFace, "😱", emotion => emotion.Fear),
+                     emotionTextItem(remoteFace, "😁", emotion => emotion.Happiness),
+                     emotionTextItem(remoteFace, "☹️", emotion => emotion.Sadness),
+                     emotionTextItem(remoteFace, "😮", emotion => emotion.Surprise)
+                  }
+               };
+
+            foreach (var remoteFaceAttributes in remoteFacesAttributes)
+            {
+               this.VisualizationCanvas.Children.Add(faceRectangleCanvasItem(this.VisualizationCanvas, remoteFaceAttributes.relativeRectangle));
+               for (var i = 0; i<remoteFaceAttributes.emotionTextItems.Count(); ++i)
+               {
+                  this.VisualizationCanvas.Children.Add(
+                     emotionCanvasItem(
+                        this.VisualizationCanvas,
+                        remoteFaceAttributes.relativeRectangle,
+                        remoteFaceAttributes.emotionTextItems[i],
+                        i + 1));
+               }
+            }
          }
       }
 
@@ -442,25 +463,39 @@ namespace SmilePhotoKiosk
 
          foreach (var box in boxes)
          {
-            this.VisualizationCanvas.Children.Add(box);
+            canvas.Children.Add(box);
          }
       }
 
-
-      private RelativeRectangle GetFaceRectangleRelativeToFrame(LocalDetectedFace face, VideoFrame videoFrame)
+      private RelativeRectangle GetFaceRectangleRelativeToFrame(LocalDetectedFace face, Size videoFrameSize)
       {
-         double left = (double)face.FaceBox.X / (double)videoFrame.SoftwareBitmap.PixelWidth;
-         double top = (double)face.FaceBox.Y / (double)videoFrame.SoftwareBitmap.PixelHeight;
-         double width = (double)face.FaceBox.Width / (double)videoFrame.SoftwareBitmap.PixelWidth;
-         double height = (double)face.FaceBox.Height / (double)videoFrame.SoftwareBitmap.PixelHeight;
-         return new RelativeRectangle( left: left, top: top, width: width, height: height );
+         double left = (double)face.FaceBox.X / (double)videoFrameSize.Width;
+         double top = (double)face.FaceBox.Y / (double)videoFrameSize.Height;
+         double width = (double)face.FaceBox.Width / (double)videoFrameSize.Width;
+         double height = (double)face.FaceBox.Height / (double)videoFrameSize.Height;
+         return new RelativeRectangle(left: left, top: top, width: width, height: height);
       }
 
-      private IList<RelativeRectangle> GetFaceRectanglesRelativeToFrame(IEnumerable<LocalDetectedFace> faces, VideoFrame videoFrame)
+      private IList<RelativeRectangle> GetFaceRectanglesRelativeToFrame(IEnumerable<LocalDetectedFace> faces, Size videoFrameSize)
       {
          return
             (from face in faces
-             select GetFaceRectangleRelativeToFrame(face, videoFrame)).ToList();
+             select GetFaceRectangleRelativeToFrame(face, videoFrameSize)).ToList();
+      }
+      private RelativeRectangle GetFaceRectangleRelativeToFrame(RemoteDetectedFace face, Size videoFrameSize)
+      {
+         double left = (double)face.FaceRectangle.Left / (double)videoFrameSize.Width;
+         double top = (double)face.FaceRectangle.Top / (double)videoFrameSize.Height;
+         double width = (double)face.FaceRectangle.Width / (double)videoFrameSize.Width;
+         double height = (double)face.FaceRectangle.Height / (double)videoFrameSize.Height;
+         return new RelativeRectangle(left: left, top: top, width: width, height: height);
+      }
+
+      private IList<RelativeRectangle> GetFaceRectanglesRelativeToFrame(IEnumerable<RemoteDetectedFace> faces, Size videoFrameSize)
+      {
+         return
+            (from face in faces
+             select GetFaceRectangleRelativeToFrame(face, videoFrameSize)).ToList();
       }
 
       private async Task<IList<LocalDetectedFace>> FindFacesOnFrameLocalAsync(VideoFrame videoFrame)
@@ -508,59 +543,6 @@ namespace SmilePhotoKiosk
          this.mediaCapture = null;
       }
 
-      //private async Task ProcessCurrentVideoFrameAsync(IList<RemoteDetectedFace> remoteFaces)
-      //{
-      //   try
-      //   {
-      //      if (remoteFaces.Count > 0)
-      //      {
-      //         var remoteFace = remoteFaces[0];
-
-      //         // Create our visualization using the frame dimensions and face results but run it on the UI thread.
-      //         var videoFrameSize = new Windows.Foundation.Size(videoFrame.SoftwareBitmap.PixelWidth, videoFrame.SoftwareBitmap.PixelHeight);
-      //         var ignored = this.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
-      //         {
-      //            this.SetupVisualization(videoFrameSize, remoteFaces);
-      //            this.SetupProgressBar(
-      //               remoteFace.FaceAttributes.Emotion.Anger,
-      //               remoteFace.FaceAttributes.Emotion.Contempt,
-      //               remoteFace.FaceAttributes.Emotion.Disgust,
-      //               remoteFace.FaceAttributes.Emotion.Fear,
-      //               remoteFace.FaceAttributes.Emotion.Happiness,
-      //               remoteFace.FaceAttributes.Emotion.Sadness,
-      //               remoteFace.FaceAttributes.Emotion.Surprise,
-      //               remoteFace.FaceAttributes.Smile.Value);
-      //         });
-
-      //         if (remoteFace.FaceAttributes.Smile.Value > smileThreshold)
-      //         {
-      //            var file = await captureFolder.CreateFileAsync("SmileFace.jpg", CreationCollisionOption.GenerateUniqueName);
-      //            var croppedBitmap = CropImageByRect(videoFrame.SoftwareBitmap, remoteFace.FaceRectangle);
-      //            await SaveSoftwareBitmapAsync(croppedBitmap, file);
-      //         }
-      //      }
-      //   }
-      //   catch (Exception ex)
-      //   {
-      //      var ignored = this.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
-      //      {
-      //         NotifyUser(ex.ToString(), NotifyType.ErrorMessage);
-      //      });
-      //   }
-      //}
-
-      private void SetupProgressBar(double anger, double contempt, double disgust, double fear, double happiness, double sadness, double surprise, double smile)
-      {
-         progress_anger.Value = anger * progress_anger.Maximum;
-         progress_contempt.Value = contempt * progress_contempt.Maximum;
-         progress_disgust.Value = disgust * progress_disgust.Maximum;
-         progress_fear.Value = fear * progress_fear.Maximum;
-         progress_happiness.Value = happiness * progress_happiness.Maximum;
-         progress_sadness.Value = sadness * progress_sadness.Maximum;
-         progress_surprise.Value = surprise * progress_surprise.Maximum;
-         progress_smile.Value = smile * progress_smile.Maximum;
-      }
-
       /// <summary>
       /// Handles MediaCapture stream failures by shutting down streaming and returning to Idle state.
       /// </summary>
@@ -575,59 +557,19 @@ namespace SmilePhotoKiosk
          });
       }
 
-      /// <summary>
-      /// Display a message to the user.
-      /// This method may be called from any thread.
-      /// </summary>
-      /// <param name="strMessage"></param>
-      /// <param name="type"></param>
-      private void NotifyUser(string strMessage, NotifyType type)
+      private async Task Log(LogType logType, string message)
       {
-         // If called from the UI thread, then update immediately.
-         // Otherwise, schedule a task on the UI thread to perform the update.
-         if (Dispatcher.HasThreadAccess)
-         {
-            UpdateStatus(strMessage, type);
-         }
-         else
-         {
-            var task = Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () => UpdateStatus(strMessage, type));
-         }
+         await ((App)App.Current).WriteMessageAsync(logType, message);
       }
 
-      private void UpdateStatus(string strMessage, NotifyType type)
+      private async Task LogError(string errorMessage)
       {
-         switch (type)
-         {
-            case NotifyType.StatusMessage:
-               StatusBorder.Background = new SolidColorBrush(Windows.UI.Colors.Green);
-               break;
-            case NotifyType.ErrorMessage:
-               StatusBorder.Background = new SolidColorBrush(Windows.UI.Colors.Red);
-               break;
-         }
+         await Log(LogType.Error, errorMessage);
+      }
 
-         StatusBlock.Text = strMessage;
-
-         // Collapse the StatusBlock if it has no text to conserve real estate.
-         StatusBorder.Visibility = (StatusBlock.Text != String.Empty) ? Visibility.Visible : Visibility.Collapsed;
-         if (StatusBlock.Text != String.Empty)
-         {
-            StatusBorder.Visibility = Visibility.Visible;
-            StatusPanel.Visibility = Visibility.Visible;
-         }
-         else
-         {
-            StatusBorder.Visibility = Visibility.Collapsed;
-            StatusPanel.Visibility = Visibility.Collapsed;
-         }
-
-         // Raise an event if necessary to enable a screen reader to announce the status update.
-         var peer = FrameworkElementAutomationPeer.FromElement(StatusBlock);
-         if (peer != null)
-         {
-            peer.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
-         }
+      private async Task LogStatus(string statusMessage)
+      {
+         await Log(LogType.Status, statusMessage);
       }
 
       /// <summary>
